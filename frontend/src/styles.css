@@ -733,6 +733,7 @@ button:disabled {
 .user-actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .user-table button {
@@ -757,4 +758,14 @@ button:disabled {
 
 .user-table button.danger:hover {
   background: var(--danger-light);
+}
+
+.user-table button.secondary {
+  background: none;
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+}
+
+.user-table button.secondary:hover {
+  background: var(--accent-light);
 }

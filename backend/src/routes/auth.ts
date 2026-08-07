@@ -82,21 +82,16 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Re-sync admin status against the allowlist on every login, so adding or
-    // removing an email from ADMIN_EMAILS takes effect the next time that
-    // person logs in — no manual DB edit needed. Only ever *grants* status
-    // changes here (and auto-approves on grant); demotion never touches
-    // `status`, so a config mistake can't silently lock an approved user out.
-    if (adminEmailsConfigured()) {
-      const shouldBeAdmin = isConfiguredAdminEmail(user.email);
-      if (shouldBeAdmin && user.role !== 'admin') {
-        await pool.query(`UPDATE users SET role = 'admin', status = 'approved' WHERE id = $1`, [user.id]);
-        user.role = 'admin';
-        user.status = 'approved';
-      } else if (!shouldBeAdmin && user.role === 'admin') {
-        await pool.query(`UPDATE users SET role = 'user' WHERE id = $1`, [user.id]);
-        user.role = 'user';
-      }
+    // ADMIN_EMAILS is a safety net, not the source of truth — admins are
+    // otherwise managed entirely in the database via the Admin page's
+    // promote/demote buttons, with no redeploy required. So this only ever
+    // *grants* admin on login (and auto-approves on grant); it never
+    // demotes someone who isn't on the list, which would otherwise silently
+    // undo an in-app promotion the next time that person logged in.
+    if (adminEmailsConfigured() && isConfiguredAdminEmail(user.email) && user.role !== 'admin') {
+      await pool.query(`UPDATE users SET role = 'admin', status = 'approved' WHERE id = $1`, [user.id]);
+      user.role = 'admin';
+      user.status = 'approved';
     }
 
     const token = signToken(user.id);

@@ -56,4 +56,39 @@ router.post('/users/:id/revoke', async (req, res, next) => {
   }
 });
 
+// Admin status lives in the `role` column and is managed from here going
+// forward — no env var or redeploy needed. Promoting also auto-approves,
+// since an admin should always have access.
+router.post('/users/:id/promote', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET role = 'admin', status = 'approved' WHERE id = $1
+       RETURNING id, email, status, role`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/users/:id/demote', async (req, res, next) => {
+  try {
+    if (req.user?.id === req.params.id) {
+      return res.status(400).json({ error: "You can't remove your own admin access" });
+    }
+    // Demotion never touches `status` — losing admin rights shouldn't also
+    // revoke ordinary access to the app.
+    const { rows } = await pool.query(
+      `UPDATE users SET role = 'user' WHERE id = $1 RETURNING id, email, status, role`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

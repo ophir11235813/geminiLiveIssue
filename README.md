@@ -30,14 +30,15 @@ backed by the Claude API, an admin dashboard, and approval/revoke emails.
 - **Auth: roll-your-own** (bcrypt + JWT), not Clerk. Clerk is a fine choice too, but it pulls in an
   external account system for what's a small, single-tenant, invite-only app — plain
   email/password with an approval gate is simpler to reason about and self-contained.
-- **Admin identity: an email allowlist (`ADMIN_EMAILS`)**, not a role you flip by hand in the
-  database. Anyone whose email is in that comma-separated env var is granted `admin` (and
-  auto-approved) the moment they sign up or next log in; removing an email from the list demotes
-  them to a regular user on their next login (their approval status is never touched by this, only
-  the role — a config mistake can't accidentally lock someone out). If `ADMIN_EMAILS` is left unset
-  entirely, the very first person to sign up becomes admin instead, purely as a zero-config
-  bootstrap for a brand-new deployment — set the real allowlist once you know who the admin(s)
-  should be.
+- **Admin identity lives in the database (`role` column), managed from the Admin page** —
+  promote/demote buttons next to each user, no redeploy or env var edit needed to add an admin
+  later. `ADMIN_EMAILS` (comma-separated env var) exists alongside this as a safety net, not the
+  primary mechanism: it only ever *grants* admin (on signup, or on next login for an existing
+  account) and auto-approves when it does; it never revokes admin from someone who isn't on the
+  list, so it can't fight with an in-app promotion. Demoting via the Admin page never touches
+  approval status, only the role, and an admin can't demote themselves (so there's always at least
+  one left). If `ADMIN_EMAILS` is left unset entirely, the very first person to sign up becomes
+  admin instead, purely as a zero-config bootstrap for a brand-new deployment.
 - **Auth token delivery: a bearer token in `localStorage`, not just a session cookie.** The
   frontend (Vercel) and backend (Railway/etc.) live on different domains, and Safari/iOS blocks
   cross-site cookies outright (ITP) even with `SameSite=None; Secure` set correctly. Login/signup
@@ -101,7 +102,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `DATABASE_URL`     | yes      | Postgres connection string                                   |
 | `PGSSL`            | no       | `require` for hosted Postgres, `disable` for local (default) |
 | `JWT_SECRET`       | yes      | Long random string (`openssl rand -hex 32`)                  |
-| `ADMIN_EMAILS`     | no       | Comma-separated emails that are always admin. Unset → first signup becomes admin instead |
+| `ADMIN_EMAILS`     | no       | Comma-separated emails auto-granted admin (safety net, not the main path — see above). Unset → first signup becomes admin instead |
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
 | `RESEND_API_KEY`   | no       | Omit to log emails to the console instead of sending them     |
@@ -139,6 +140,8 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `GET /admin/users?status=`        | admin             | List users by status                   |
 | `POST /admin/users/:id/approve`   | admin             | Approve (or re-approve) a user, emails them |
 | `POST /admin/users/:id/revoke`    | admin             | Revoke a user, emails them             |
+| `POST /admin/users/:id/promote`   | admin             | Grant admin (also auto-approves)       |
+| `POST /admin/users/:id/demote`    | admin             | Remove admin (can't demote yourself)   |
 | `GET /documents`                  | approved          | List all documents                     |
 | `POST /documents`                 | approved          | Add a document (paste JSON or multipart file) |
 | `PATCH /documents/:id`            | admin or uploader | Edit title/source type/content         |

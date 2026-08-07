@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 interface AdminUser {
   id: string;
@@ -12,6 +13,7 @@ interface AdminUser {
 const TABS: Array<AdminUser['status']> = ['pending', 'approved', 'revoked'];
 
 export default function Admin() {
+  const { user: currentUser } = useAuth();
   const [tab, setTab] = useState<AdminUser['status']>('pending');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +31,7 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  async function act(id: string, action: 'approve' | 'revoke') {
+  async function act(id: string, action: 'approve' | 'revoke' | 'promote' | 'demote') {
     setBusyId(id);
     try {
       await api.post(`/admin/users/${id}/${action}`);
@@ -86,6 +88,25 @@ export default function Admin() {
                       >
                         Revoke
                       </button>
+                    )}
+                    {u.role !== 'admin' ? (
+                      <button
+                        className="secondary"
+                        disabled={busyId === u.id}
+                        onClick={() => act(u.id, 'promote')}
+                      >
+                        Make admin
+                      </button>
+                    ) : (
+                      u.id !== currentUser?.id && (
+                        <button
+                          className="secondary"
+                          disabled={busyId === u.id}
+                          onClick={() => act(u.id, 'demote')}
+                        >
+                          Remove admin
+                        </button>
+                      )
                     )}
                   </td>
                 </tr>
