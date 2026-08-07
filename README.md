@@ -51,7 +51,6 @@ cd backend
 cp .env.example .env
 # edit .env: set DATABASE_URL (and PGSSL=require if it's a hosted DB), JWT_SECRET, ANTHROPIC_API_KEY
 npm install
-npm run migrate   # creates users / documents / chat_messages tables
 ```
 
 ### 2. Backend
@@ -60,6 +59,12 @@ npm run migrate   # creates users / documents / chat_messages tables
 cd backend
 npm run dev        # http://localhost:4000
 ```
+
+The server applies database migrations automatically on every boot (they're idempotent, so this
+is safe on every restart/redeploy) — there's no separate manual migration step, which matters if
+you're deploying straight from a host like Railway without ever running anything locally. If you
+do want to run migrations by hand for some reason (e.g. against a DB the server isn't pointed at
+yet), `npm run migrate` still works standalone.
 
 ### 3. Frontend
 
@@ -102,9 +107,12 @@ the admin approves them from `/admin`.
 - **Frontend → Vercel:** import the repo, set the project root to `frontend`, framework preset
   "Vite", and add `VITE_API_URL` pointing at your deployed backend.
 - **Backend → any Node host (Railway/Render/Fly/etc.):** build with the included `Dockerfile`, or
-  run `npm run build && npm start`. Run `npm run migrate` once against the production database
-  before first boot. Set all the backend env vars above, with `NODE_ENV=production` so auth
-  cookies are issued with `Secure; SameSite=None` for cross-origin use from the Vercel frontend.
+  run `npm run build && npm start` — the database schema is created/updated automatically on boot,
+  so no separate migration step is needed. Set all the backend env vars above, with
+  `NODE_ENV=production` so auth cookies are issued with `Secure; SameSite=None` for cross-origin
+  use from the Vercel frontend. **Monorepo note:** when connecting the repo to your host, set the
+  service's root/source directory to `backend` (and `frontend` for the separate Vercel project) —
+  otherwise the build won't find the app.
 
 ## API summary
 

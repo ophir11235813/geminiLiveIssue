@@ -1,16 +1,17 @@
 import 'dotenv/config';
-import fs from 'fs';
-import path from 'path';
 import { pool } from './db';
+import { applyMigrations } from './lib/runMigrations';
 
-async function migrate() {
-  const sql = fs.readFileSync(path.join(__dirname, 'migrations', '0001_init.sql'), 'utf-8');
-  await pool.query(sql);
+// Standalone entry point (`npm run migrate`) for running migrations manually,
+// e.g. from a local machine. Not required in normal operation — the server
+// applies migrations automatically on boot (see index.ts).
+async function main() {
+  await applyMigrations(pool);
   console.log('Migrations applied successfully');
   await pool.end();
 }
 
-migrate().catch((err) => {
+main().catch((err) => {
   console.error('Migration failed', err);
   process.exit(1);
 });
