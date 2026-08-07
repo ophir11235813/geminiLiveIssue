@@ -14,7 +14,7 @@ backed by the Claude API, an admin dashboard, and approval/revoke emails.
 | Frontend | React + TypeScript + Vite (`/frontend`)              |
 | Backend  | Node.js + TypeScript + Express (`/backend`)          |
 | Database | PostgreSQL                                          |
-| Auth     | Roll-your-own — email/password + JWT in an httpOnly cookie |
+| Auth     | Roll-your-own — email/password + JWT bearer token          |
 | LLM      | Claude API (`@anthropic-ai/sdk`)                     |
 | Email    | [Resend](https://resend.com)                         |
 
@@ -30,8 +30,20 @@ backed by the Claude API, an admin dashboard, and approval/revoke emails.
 - **Auth: roll-your-own** (bcrypt + JWT), not Clerk. Clerk is a fine choice too, but it pulls in an
   external account system for what's a small, single-tenant, invite-only app — plain
   email/password with an approval gate is simpler to reason about and self-contained.
-- **Bootstrapping the first admin:** the very first person to sign up is auto-approved as `admin`
-  (no manual DB edit needed). Everyone after that starts `pending` until an admin approves them.
+- **Admin identity: an email allowlist (`ADMIN_EMAILS`)**, not a role you flip by hand in the
+  database. Anyone whose email is in that comma-separated env var is granted `admin` (and
+  auto-approved) the moment they sign up or next log in; removing an email from the list demotes
+  them to a regular user on their next login (their approval status is never touched by this, only
+  the role — a config mistake can't accidentally lock someone out). If `ADMIN_EMAILS` is left unset
+  entirely, the very first person to sign up becomes admin instead, purely as a zero-config
+  bootstrap for a brand-new deployment — set the real allowlist once you know who the admin(s)
+  should be.
+- **Auth token delivery: a bearer token in `localStorage`, not just a session cookie.** The
+  frontend (Vercel) and backend (Railway/etc.) live on different domains, and Safari/iOS blocks
+  cross-site cookies outright (ITP) even with `SameSite=None; Secure` set correctly. Login/signup
+  return the JWT in the response body; the frontend stores it and sends it as `Authorization:
+  Bearer <token>` on every request. A cookie is still set too, as a same-origin convenience for
+  local dev, but the header is what actually carries auth once deployed.
 
 ## Project layout
 
@@ -75,9 +87,10 @@ npm install
 npm run dev             # http://localhost:5173
 ```
 
-Open `http://localhost:5173`, sign up — the first account becomes the admin automatically and is
-immediately approved. Anyone who signs up after that lands on a "waiting for approval" screen until
-the admin approves them from `/admin`.
+Open `http://localhost:5173`, sign up with an email listed in `ADMIN_EMAILS` (or, if you haven't
+set that yet, whichever email you use first) — that account becomes admin and is immediately
+approved. Anyone else lands on a "waiting for approval" screen until the admin approves them from
+`/admin`.
 
 ## Environment variables
 
@@ -88,6 +101,7 @@ the admin approves them from `/admin`.
 | `DATABASE_URL`     | yes      | Postgres connection string                                   |
 | `PGSSL`            | no       | `require` for hosted Postgres, `disable` for local (default) |
 | `JWT_SECRET`       | yes      | Long random string (`openssl rand -hex 32`)                  |
+| `ADMIN_EMAILS`     | no       | Comma-separated emails that are always admin. Unset → first signup becomes admin instead |
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
 | `RESEND_API_KEY`   | no       | Omit to log emails to the console instead of sending them     |
@@ -129,8 +143,21 @@ the admin approves them from `/admin`.
 | `POST /documents`                 | approved          | Add a document (paste JSON or multipart file) |
 | `PATCH /documents/:id`            | admin or uploader | Edit title/source type/content         |
 | `DELETE /documents/:id`           | admin or uploader | Delete a document                      |
-| `POST /chat`                      | approved          | Ask a question, get a Claude-generated answer grounded in all documents |
-| `GET /chat/history`               | approved          | This user's chat history               |
+| `GET /chat/sessions`               | approved          | List this user's chats, most recently active first |
+| `POST /chat/messages`              | approved          | Ask a question in a chat (creates a new chat if `sessionId` omitted), get a Claude-generated answer grounded in all documents |
+| `GET /chat/sessions/:id/messages`  | approved (owner)  | Full message history for one chat      |
+| `PATCH /chat/sessions/:id`         | approved (owner)  | Rename a chat                          |
+| `DELETE /chat/sessions/:id`        | approved (owner)  | Delete a chat and its messages         |
+
+## Data model
+
+- **users** — `id`, `email`, `password_hash`, `status` (`pending`/`approved`/`revoked`), `role`
+  (`admin`/`user`), `created_at`
+- **documents** — `id`, `uploader_id`, `title`, `source_type`, `content`, `created_at`
+- **chat_sessions** — `id`, `user_id`, `title`, `created_at`, `updated_at`. One row per
+  conversation — a user can have many.
+- **chat_messages** — `id`, `user_id`, `session_id`, `role` (`user`/`assistant`), `content`,
+  `created_at`. Belongs to a `chat_sessions` row.
 
 ## Notes / v1 limitations (matches the spec's non-goals)
 

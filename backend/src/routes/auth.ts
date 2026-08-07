@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool } from '../db';
 import { signToken, requireAuth } from '../middleware/auth';
+import { adminEmailsConfigured, isConfiguredAdminEmail } from '../lib/adminEmails';
 
 const router = Router();
 const COOKIE_NAME = 'session';
@@ -30,17 +31,24 @@ router.post('/signup', async (req, res, next) => {
       return res.status(409).json({ error: 'An account with this email already exists' });
     }
 
-    // The very first user to sign up becomes an approved admin so there's
-    // always someone who can approve everyone else. Everyone after starts pending.
-    const { rows: countRows } = await pool.query('SELECT COUNT(*)::int AS count FROM users');
-    const isFirstUser = countRows[0].count === 0;
+    // Admin status is decided by the ADMIN_EMAILS allowlist. As a zero-config
+    // fallback for a brand-new deployment where that hasn't been set up yet,
+    // the very first person to sign up becomes an approved admin instead —
+    // but once ADMIN_EMAILS is configured, it's the sole source of truth.
+    let shouldBeAdmin: boolean;
+    if (adminEmailsConfigured()) {
+      shouldBeAdmin = isConfiguredAdminEmail(normalizedEmail);
+    } else {
+      const { rows: countRows } = await pool.query('SELECT COUNT(*)::int AS count FROM users');
+      shouldBeAdmin = countRows[0].count === 0;
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
       `INSERT INTO users (email, password_hash, status, role)
        VALUES ($1, $2, $3, $4)
        RETURNING id, email, status, role`,
-      [normalizedEmail, passwordHash, isFirstUser ? 'approved' : 'pending', isFirstUser ? 'admin' : 'user']
+      [normalizedEmail, passwordHash, shouldBeAdmin ? 'approved' : 'pending', shouldBeAdmin ? 'admin' : 'user']
     );
     const user = rows[0];
 
@@ -72,6 +80,23 @@ router.post('/login', async (req, res, next) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Re-sync admin status against the allowlist on every login, so adding or
+    // removing an email from ADMIN_EMAILS takes effect the next time that
+    // person logs in — no manual DB edit needed. Only ever *grants* status
+    // changes here (and auto-approves on grant); demotion never touches
+    // `status`, so a config mistake can't silently lock an approved user out.
+    if (adminEmailsConfigured()) {
+      const shouldBeAdmin = isConfiguredAdminEmail(user.email);
+      if (shouldBeAdmin && user.role !== 'admin') {
+        await pool.query(`UPDATE users SET role = 'admin', status = 'approved' WHERE id = $1`, [user.id]);
+        user.role = 'admin';
+        user.status = 'approved';
+      } else if (!shouldBeAdmin && user.role === 'admin') {
+        await pool.query(`UPDATE users SET role = 'user' WHERE id = $1`, [user.id]);
+        user.role = 'user';
+      }
     }
 
     const token = signToken(user.id);

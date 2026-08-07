@@ -54,41 +54,45 @@ export default function Admin() {
       ) : users.length === 0 ? (
         <p className="empty-state">No {tab} users.</p>
       ) : (
-        <table className="user-table">
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Joined</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>{u.email}</td>
-                <td>{u.role}</td>
-                <td>{new Date(u.created_at).toLocaleDateString()}</td>
-                <td className="user-actions">
-                  {u.status !== 'approved' && (
-                    <button disabled={busyId === u.id} onClick={() => act(u.id, 'approve')}>
-                      Approve
-                    </button>
-                  )}
-                  {u.status !== 'revoked' && u.role !== 'admin' && (
-                    <button
-                      className="danger"
-                      disabled={busyId === u.id}
-                      onClick={() => act(u.id, 'revoke')}
-                    >
-                      Revoke
-                    </button>
-                  )}
-                </td>
+        <div className="table-scroll">
+          <table className="user-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Joined</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.email}</td>
+                  <td>
+                    <span className={`role-badge ${u.role}`}>{u.role}</span>
+                  </td>
+                  <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td className="user-actions">
+                    {u.status !== 'approved' && (
+                      <button disabled={busyId === u.id} onClick={() => act(u.id, 'approve')}>
+                        Approve
+                      </button>
+                    )}
+                    {u.status !== 'revoked' && u.role !== 'admin' && (
+                      <button
+                        className="danger"
+                        disabled={busyId === u.id}
+                        onClick={() => act(u.id, 'revoke')}
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
