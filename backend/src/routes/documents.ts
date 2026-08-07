@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { pool } from '../db';
 import { requireAuth, requireApproved } from '../middleware/auth';
-import { extractTextFromFile } from '../lib/extractText';
+import { extractTextFromFile, UnsupportedFileTypeError } from '../lib/extractText';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const router = Router();
@@ -30,8 +30,14 @@ router.post('/', upload.single('file'), async (req, res, next) => {
     if (req.file) {
       try {
         content = await extractTextFromFile(req.file.buffer, req.file.mimetype);
-      } catch (err: any) {
-        return res.status(400).json({ error: err.message });
+      } catch (err) {
+        if (err instanceof UnsupportedFileTypeError) {
+          return res.status(400).json({ error: err.message });
+        }
+        // A supported type that failed while being processed (e.g. Claude
+        // couldn't read the image) isn't the user's fault — worth a retry.
+        console.error('File extraction failed', err);
+        return res.status(502).json({ error: 'Could not process that file. Please try again.' });
       }
     }
 
@@ -39,9 +45,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
       return res.status(400).json({ error: 'title and sourceType are required' });
     }
     if (!content || !content.trim()) {
-      return res
-        .status(400)
-        .json({ error: 'Provide file content or pasted text (images need a text caption for now)' });
+      return res.status(400).json({ error: 'Provide file content or pasted text' });
     }
 
     const { rows } = await pool.query(

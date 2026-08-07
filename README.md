@@ -105,6 +105,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `ADMIN_EMAILS`     | no       | Comma-separated emails auto-granted admin (safety net, not the main path — see above). Unset → first signup becomes admin instead |
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
+| `SCHOOL_CONTEXT`   | no       | One line of fixed context given to the model on every question (defaults to the Springhill Elementary / Hideout description) |
 | `RESEND_API_KEY`   | no       | Omit to log emails to the console instead of sending them     |
 | `FROM_EMAIL`       | no       | Sender address for approval/revoke emails                     |
 | `CLIENT_ORIGIN`    | yes      | Frontend origin, for CORS + cookies                            |
@@ -162,11 +163,29 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 - **chat_messages** — `id`, `user_id`, `session_id`, `role` (`user`/`assistant`), `content`,
   `created_at`. Belongs to a `chat_sessions` row.
 
-## Notes / v1 limitations (matches the spec's non-goals)
+## Chat context, caching, and images
 
 - No vector DB — every chat request concatenates all documents (capped at ~150k characters) and
   sends them straight to Claude as context. Fine at small scale; if the corpus grows a lot, add
   keyword filtering before that call.
-- No OCR — images (flyers, photos) aren't text-extracted. Describe them in a pasted-text document
-  instead. `.txt` and `.pdf` uploads are extracted automatically.
+- **Prompt caching** — the document context (the bulk, mostly-unchanged part of the prompt) is
+  sent with `cache_control: { type: 'ephemeral' }`, so follow-up questions in the same chat reuse
+  it via Anthropic's prompt cache instead of reprocessing the full context every turn.
+- **System prompt** carries fixed context that this is for a family whose kids attend Springhill
+  Elementary (Lafayette, CA) and Hideout (an after-school program) — overridable via the
+  `SCHOOL_CONTEXT` env var without a code change.
+- **Images are supported** — uploading a `.jpg`/`.png`/`.gif`/`.webp` sends it to Claude's vision
+  once at upload time; the returned transcription/description is stored as the document's text
+  content, and the image bytes themselves are discarded (never stored). `.txt` and `.pdf` uploads
+  are still extracted directly, no LLM call needed for those.
 - No Gmail integration — content is added manually via the Documents page, as specified.
+
+## Feels like an app, not a website
+
+- The document (`<body>`) never scrolls — `#root` owns all scrolling internally, and `.nav` sits
+  entirely outside any scrollable container, so there's no rubber-band bounce that drags the header
+  or chat input around on iOS.
+- `apple-mobile-web-app-capable` + a touch icon are set up, so "Add to Home Screen" launches
+  full-screen with no Safari chrome at all.
+- Safe-area insets (`env(safe-area-inset-*)`) are respected around the nav and chat input, so
+  content clears the notch/Dynamic Island and home-indicator area.

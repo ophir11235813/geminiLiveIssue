@@ -37,9 +37,20 @@
 }
 
 html,
-body,
-#root {
+body {
   height: 100%;
+  /* The document itself never scrolls — #root owns scrolling internally.
+     Nothing to rubber-band/bounce means nothing bounces. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100vh; /* fallback for browsers without dvh support */
+  height: 100dvh; /* accounts for mobile browser chrome showing/hiding */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 body {
@@ -88,11 +99,17 @@ a {
   flex-wrap: wrap;
   gap: 0.9rem;
   padding: 0.7rem 1.5rem;
+  /* Safe-area padding so the bar clears the notch/Dynamic Island when this
+     is added to the home screen and launched standalone. */
+  padding-top: calc(0.7rem + env(safe-area-inset-top));
+  padding-left: calc(1.5rem + env(safe-area-inset-left));
+  padding-right: calc(1.5rem + env(safe-area-inset-right));
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  flex-shrink: 0;
+  /* No position:sticky needed — .nav sits outside the scrolling container
+     (.container) entirely now, so it's structurally immovable, not just
+     visually pinned. */
 }
 
 .brand {
@@ -176,6 +193,18 @@ a {
   max-width: 1120px;
   margin: 0 auto;
   padding: 1.5rem;
+  padding-left: calc(1.5rem + env(safe-area-inset-left));
+  padding-right: calc(1.5rem + env(safe-area-inset-right));
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  /* This — not the document body — is what actually scrolls for normal
+     pages. It fills the remaining space below .nav exactly, and
+     overscroll-behavior stops any bounce from chaining past its own edges. */
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .centered {
@@ -312,7 +341,9 @@ button:disabled {
 
 .chat-shell {
   display: flex;
-  height: calc(100vh - 90px);
+  /* Fills .container exactly — .container is already sized to the space
+     below .nav, so this needs no viewport-height math of its own. */
+  height: 100%;
   min-height: 420px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -357,6 +388,8 @@ button:disabled {
 .session-list {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 0.5rem;
   display: flex;
   flex-direction: column;
@@ -468,6 +501,8 @@ button:disabled {
 .chat-log {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -509,7 +544,7 @@ button:disabled {
   display: flex;
   flex-direction: row;
   gap: 0.6rem;
-  padding: 0.9rem 0 1.1rem;
+  padding: 0.9rem 0 calc(1.1rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
 }
 
@@ -523,11 +558,15 @@ button:disabled {
 
 @media (max-width: 768px) {
   .container {
-    padding: 0.9rem;
+    /* Longhand, not shorthand — a plain `padding:` here would wipe out the
+       safe-area-aware left/right/bottom values set above. */
+    padding-top: 0.9rem;
+    padding-left: calc(0.9rem + env(safe-area-inset-left));
+    padding-right: calc(0.9rem + env(safe-area-inset-right));
+    padding-bottom: calc(0.9rem + env(safe-area-inset-bottom));
   }
 
   .chat-shell {
-    height: calc(100vh - 76px);
     border-radius: var(--radius-md);
   }
 

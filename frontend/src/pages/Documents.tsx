@@ -116,22 +116,23 @@ export default function Documents() {
             </label>
           ) : (
             <label>
-              File (.txt or .pdf)
+              File (.txt, .pdf, or a photo)
               <input
                 type="file"
-                accept=".txt,.pdf,text/plain,application/pdf"
+                accept=".txt,.pdf,.jpg,.jpeg,.png,.gif,.webp,text/plain,application/pdf,image/jpeg,image/png,image/gif,image/webp"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 required
               />
               <span className="field-hint">
-                For images (flyers, photos), switch to "Paste text" and describe what's in it — image
-                text extraction isn't supported yet.
+                {file && file.type.startsWith('image/')
+                  ? "Photos take a few extra seconds — Claude reads the text and details out of it, and only that text is kept (the photo itself isn't stored)."
+                  : 'Photos of flyers/notes work too — text and details get read out of them automatically.'}
               </span>
             </label>
           )}
           {error && <p className="error">{error}</p>}
           <button type="submit" disabled={submitting}>
-            {submitting ? 'Adding…' : 'Add document'}
+            {submitting ? (mode === 'file' && file?.type.startsWith('image/') ? 'Reading photo…' : 'Adding…') : 'Add document'}
           </button>
         </form>
       </section>
