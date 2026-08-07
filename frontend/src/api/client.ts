@@ -1,4 +1,7 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Strip any trailing slash — a stray one in the env var (e.g. "https://host.app/")
+// would otherwise produce double-slash URLs like "https://host.app//auth/login"
+// that don't match any backend route.
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/+$/, '');
 
 export class ApiError extends Error {
   status: number;
