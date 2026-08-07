@@ -46,7 +46,7 @@ router.post('/signup', async (req, res, next) => {
 
     const token = signToken(user.id);
     res.cookie(COOKIE_NAME, token, cookieOpts);
-    res.status(201).json({ user });
+    res.status(201).json({ user, token });
   } catch (err) {
     next(err);
   }
@@ -76,7 +76,7 @@ router.post('/login', async (req, res, next) => {
 
     const token = signToken(user.id);
     res.cookie(COOKIE_NAME, token, cookieOpts);
-    res.json({ user: { id: user.id, email: user.email, status: user.status, role: user.role } });
+    res.json({ user: { id: user.id, email: user.email, status: user.status, role: user.role }, token });
   } catch (err) {
     next(err);
   }

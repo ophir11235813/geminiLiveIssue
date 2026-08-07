@@ -3,6 +3,25 @@
 // that don't match any backend route.
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/+$/, '');
 
+// Auth uses a bearer token stored here rather than relying on the session
+// cookie: the frontend (Vercel) and backend (Railway) live on different
+// domains, and Safari/iOS blocks cross-site cookies outright (ITP), even
+// with SameSite=None; Secure set correctly. A token in localStorage sent as
+// an Authorization header sidesteps that entirely.
+const TOKEN_KEY = 'fcb_token';
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 export class ApiError extends Error {
   status: number;
   data: unknown;
@@ -15,10 +34,15 @@ export class ApiError extends Error {
 
 async function request(path: string, options: RequestInit = {}) {
   const isFormData = options.body instanceof FormData;
+  const token = getToken();
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     credentials: 'include',
-    headers: isFormData ? options.headers : { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
   });
 
   const isJson = res.headers.get('content-type')?.includes('application/json');

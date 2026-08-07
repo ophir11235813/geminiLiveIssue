@@ -20,7 +20,13 @@ export function signToken(userId: string): string {
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    const token = req.cookies?.session;
+    // Prefer the Authorization header — Safari/iOS blocks cross-site cookies
+    // (frontend and backend live on different domains here) even with
+    // SameSite=None; Secure, so the cookie can't be relied on in production.
+    // The cookie is still set/read as a convenience for same-origin local dev.
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : undefined;
+    const token = bearerToken || req.cookies?.session;
     if (!token) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
