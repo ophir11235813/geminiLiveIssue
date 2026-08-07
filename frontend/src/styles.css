@@ -513,7 +513,6 @@ button:disabled {
   max-width: 75%;
   padding: 0.7rem 0.95rem;
   border-radius: var(--radius-md);
-  white-space: pre-wrap;
   line-height: 1.5;
   font-size: 0.93rem;
 }
@@ -523,17 +522,113 @@ button:disabled {
   background: var(--brand);
   color: var(--brand-contrast);
   border-bottom-right-radius: 4px;
+  /* Plain text the user typed — preserve their line breaks exactly. */
+  white-space: pre-wrap;
 }
 
 .bubble.assistant {
   align-self: flex-start;
   background: var(--surface-alt);
   border-bottom-left-radius: 4px;
+  /* Rendered markdown — spacing comes from the block elements themselves
+     (p/ul/li/h3/...), not from preserving raw whitespace. */
+  max-width: 85%;
 }
 
 .bubble.thinking {
   color: var(--muted);
   font-style: italic;
+}
+
+/* Markdown rendered inside an assistant bubble */
+.bubble.assistant > *:first-child {
+  margin-top: 0;
+}
+
+.bubble.assistant > *:last-child {
+  margin-bottom: 0;
+}
+
+.bubble.assistant p {
+  margin: 0 0 0.7em;
+}
+
+.bubble.assistant ul,
+.bubble.assistant ol {
+  margin: 0 0 0.7em;
+  padding-left: 1.3em;
+}
+
+.bubble.assistant li {
+  margin-bottom: 0.3em;
+}
+
+.bubble.assistant li > p {
+  margin: 0;
+}
+
+.bubble.assistant h1,
+.bubble.assistant h2,
+.bubble.assistant h3,
+.bubble.assistant h4 {
+  margin: 0.9em 0 0.4em;
+  line-height: 1.3;
+}
+
+.bubble.assistant h1 {
+  font-size: 1.15em;
+}
+
+.bubble.assistant h2 {
+  font-size: 1.08em;
+}
+
+.bubble.assistant h3,
+.bubble.assistant h4 {
+  font-size: 1em;
+}
+
+.bubble.assistant strong {
+  font-weight: 700;
+}
+
+.bubble.assistant a {
+  color: var(--brand-dark);
+  text-decoration: underline;
+}
+
+.bubble.assistant code {
+  background: rgba(33, 31, 27, 0.08);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.bubble.assistant pre {
+  background: rgba(33, 31, 27, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 0.7em 0.85em;
+  overflow-x: auto;
+  margin: 0 0 0.7em;
+}
+
+.bubble.assistant pre code {
+  background: none;
+  padding: 0;
+}
+
+.bubble.assistant blockquote {
+  margin: 0 0 0.7em;
+  padding-left: 0.8em;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+
+.bubble.assistant hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.8em 0;
 }
 
 .chat-error {

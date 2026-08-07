@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { api, ApiError } from '../api/client';
 
 interface Message {
@@ -198,7 +199,11 @@ export default function Chat() {
           ) : (
             messages.map((m, i) => (
               <div key={i} className={`bubble ${m.role}`}>
-                {m.content}
+                {m.role === 'assistant' ? (
+                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                ) : (
+                  m.content
+                )}
               </div>
             ))
           )}
