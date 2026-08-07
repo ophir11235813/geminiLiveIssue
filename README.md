@@ -1,4 +1,4 @@
-# Family Context Bot
+# Springhill Sherpa
 
 A private, invite-only web app for a family/school group. An admin approves who gets in; approved
 members upload context (WhatsApp exports, forwarded emails, flyers) and ask a chatbot questions

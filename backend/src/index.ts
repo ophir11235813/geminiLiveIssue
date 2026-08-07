@@ -76,7 +76,7 @@ async function start() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Family Context Bot API listening on port ${PORT}`);
+    console.log(`Springhill Sherpa API listening on port ${PORT}`);
   });
 }
 

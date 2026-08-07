@@ -10,7 +10,7 @@ const SCHOOL_CONTEXT =
   "This family's children attend Springhill Elementary School in Lafayette, California, and also " +
     'participate in Hideout, an after-school program.';
 
-const SYSTEM_INSTRUCTIONS = `You are the Family Context Bot, a helpful assistant for a family/school group.
+const SYSTEM_INSTRUCTIONS = `You are Springhill Sherpa, a helpful assistant for a family/school group.
 ${SCHOOL_CONTEXT}
 
 Answer questions using ONLY the context documents provided below (WhatsApp exports, forwarded

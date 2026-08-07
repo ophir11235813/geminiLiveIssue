@@ -1,8 +1,8 @@
 {
-  "name": "family-context-bot-backend",
+  "name": "springhill-sherpa-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "API server for the Family Context Bot",
+  "description": "API server for Springhill Sherpa",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

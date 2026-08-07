@@ -12,7 +12,7 @@ function Logo() {
           />
         </svg>
       </span>
-      <span className="brand-word">Family Context Bot</span>
+      <span className="brand-word">Springhill Sherpa</span>
     </span>
   );
 }

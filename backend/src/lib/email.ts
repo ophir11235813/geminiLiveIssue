@@ -20,7 +20,7 @@ async function send(to: string, subject: string, html: string): Promise<void> {
 export function sendApprovalEmail(to: string): Promise<void> {
   return send(
     to,
-    "You're approved — Family Context Bot",
+    "You're approved — Springhill Sherpa",
     `<p>Good news — your account has been approved.</p>
      <p>Log in here: <a href="${APP_URL}">${APP_URL}</a></p>
      <p>Use the email and password you signed up with.</p>`
@@ -30,8 +30,8 @@ export function sendApprovalEmail(to: string): Promise<void> {
 export function sendRevokeEmail(to: string): Promise<void> {
   return send(
     to,
-    'Your access has been revoked — Family Context Bot',
-    `<p>Your access to the Family Context Bot has been revoked.</p>
+    'Your access has been revoked — Springhill Sherpa',
+    `<p>Your access to Springhill Sherpa has been revoked.</p>
      <p>If you believe this is a mistake, please contact the admin.</p>`
   );
 }
