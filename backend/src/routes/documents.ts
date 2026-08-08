@@ -3,22 +3,47 @@ import multer from 'multer';
 import { pool } from '../db';
 import { requireAuth, requireApproved } from '../middleware/auth';
 import { extractTextFromFile, UnsupportedFileTypeError } from '../lib/extractText';
+import { getIngestInfo } from '../lib/emailIngest';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const router = Router();
 router.use(requireAuth, requireApproved);
 
-router.get('/', async (_req, res, next) => {
+// Tells the Documents page where to forward things and what word the
+// subject needs to contain — lets that copy stay accurate without hardcoding
+// the address in the frontend.
+router.get('/ingest-info', (_req, res) => {
+  res.json({ ingest: getIngestInfo() });
+});
+
+router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT d.id, d.title, d.source_type, d.content, d.created_at,
+      `SELECT d.id, d.title, d.source_type, d.content, d.created_at, d.uploader_id,
               d.sender, d.sent_at, d.flagged, d.flag_reason,
               u.email AS uploader_email
        FROM documents d
        LEFT JOIN users u ON u.id = d.uploader_id
        ORDER BY d.created_at DESC`
     );
-    res.json({ documents: rows });
+
+    // Only admins (or the person who added a given item) get to see what's
+    // actually in it — everyone else just sees that it exists. Enforced
+    // here, not just hidden in the UI, so the full text never reaches a
+    // non-admin browser in the first place.
+    const isAdmin = req.user!.role === 'admin';
+    const documents = rows.map(({ uploader_id, ...row }) => {
+      if (isAdmin || uploader_id === req.user!.id) return row;
+      return {
+        id: row.id,
+        title: row.title,
+        source_type: row.source_type,
+        created_at: row.created_at,
+        restricted: true,
+      };
+    });
+
+    res.json({ documents });
   } catch (err) {
     next(err);
   }

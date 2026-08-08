@@ -22,6 +22,14 @@ export function isEmailIngestConfigured(): boolean {
   return Boolean(GMAIL_USER && GMAIL_APP_PASSWORD);
 }
 
+// Lets the frontend tell people where to forward things and what word the
+// subject needs, without duplicating GMAIL_USER/GMAIL_INGEST_SUBJECT_FILTER
+// as separate frontend env vars — this stays the single source of truth.
+export function getIngestInfo(): { email: string; subjectKeyword: string } | null {
+  if (!isEmailIngestConfigured()) return null;
+  return { email: GMAIL_USER!, subjectKeyword: SUBJECT_FILTER };
+}
+
 function titleFromSubject(subject: string | undefined): string {
   const trimmed = (subject || '').trim();
   return trimmed || `Forwarded email — ${new Date().toLocaleDateString()}`;

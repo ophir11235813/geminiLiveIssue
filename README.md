@@ -153,10 +153,11 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `POST /admin/users/:id/revoke`    | admin             | Revoke a user, emails them             |
 | `POST /admin/users/:id/promote`   | admin             | Grant admin (also auto-approves)       |
 | `POST /admin/users/:id/demote`    | admin             | Remove admin (can't demote yourself)   |
-| `GET /documents`                  | approved          | List all documents                     |
+| `GET /documents`                  | approved          | List all documents — non-admins get the full record only for documents they uploaded themselves; everything else comes back as `{id, title, source_type, created_at, restricted: true}` with no `content` |
 | `POST /documents`                 | approved          | Add a document (paste JSON or multipart file) |
 | `PATCH /documents/:id`            | admin or uploader | Edit title/source type/content         |
 | `DELETE /documents/:id`           | admin or uploader | Delete a document                      |
+| `GET /documents/ingest-info`      | approved          | `{ ingest: {email, subjectKeyword} \| null }` — powers the "forward stuff here" copy on the Documents page |
 | `GET /chat/sessions`               | approved          | List this user's chats, most recently active first |
 | `POST /chat/messages`              | approved          | Ask a question in a chat (creates a new chat if `sessionId` omitted), get a Claude-generated answer grounded in all documents |
 | `GET /chat/sessions/:id/messages`  | approved (owner)  | Full message history for one chat      |
@@ -176,6 +177,17 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 - **chat_messages** — `id`, `user_id`, `session_id`, `role` (`user`/`assistant`), `content`,
   `created_at`. Belongs to a `chat_sessions` row.
 
+## Documents page: who sees what
+
+Regular (non-admin) users see the *list* of everything that's been added — titles, source types,
+timestamps — but not the actual text/content of an item, unless they're the one who added it.
+Admins see everything. This is enforced server-side in `GET /documents` (see API summary above),
+not just hidden in the UI, so a non-admin's browser never receives another person's document
+content in the first place. The page also shows a plain-language explanation box at the top
+(different copy for admins vs. everyone else) and, when email ingestion is configured, tells
+non-technical users how to add more: forward something to the configured Gmail address with the
+subject keyword in the subject line.
+
 ## Chat context, caching, and images
 
 - No vector DB — every chat request concatenates all documents (capped at ~150k characters) and
@@ -193,8 +205,8 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 - **Answers never name individuals** — the system prompt instructs the model to report only the
   factual content of a document, never who said/wrote it, even though names are often present in
   the raw source material (a conversation thread, an email signature). This only governs what the
-  chatbot says out loud; the underlying documents themselves are unredacted and fully visible to
-  any approved user on the Documents page, same as ever.
+  chatbot says out loud; Claude itself still sees full, unredacted documents when answering — the
+  restriction below is purely about what a non-admin human sees on the Documents page.
 - **Images are supported** — uploading a `.jpg`/`.png`/`.gif`/`.webp` sends it to Claude's vision
   once at upload time; the returned transcription/description is stored as the document's text
   content, and the image bytes themselves are discarded (never stored). `.txt` and `.pdf` uploads
