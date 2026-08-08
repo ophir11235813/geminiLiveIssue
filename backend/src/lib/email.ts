@@ -15,8 +15,20 @@ const gmailTransport =
     ? nodemailer.createTransport({
         service: 'gmail',
         auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+        // Nodemailer's default connection timeout is 2 minutes — fine for a
+        // real failure, but it means one transient network blip (seen in
+        // practice between Railway and Gmail's SMTP endpoint) silently sits
+        // for 2 minutes before the retry loop below even gets to try again.
+        // Fail fast instead so retries actually happen promptly.
+        connectionTimeout: 15_000,
+        greetingTimeout: 15_000,
+        socketTimeout: 15_000,
       })
     : null;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // Resend stays supported as a fallback for anyone who'd rather use it (or
 // already has a verified domain there) — just no longer the default.
@@ -26,18 +38,30 @@ const RESEND_FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
 
 async function send(to: string, subject: string, html: string): Promise<void> {
   if (gmailTransport) {
-    try {
-      await gmailTransport.sendMail({
-        from: `Springhill Sherpa <${GMAIL_USER}>`,
-        to,
-        subject,
-        html,
-      });
-      return;
-    } catch (err) {
-      console.error('Failed to send email via Gmail SMTP', err);
-      return;
+    // A transactional email (approval, revoke, password reset) is worth a
+    // couple of retries — a bare network timeout shouldn't mean the user
+    // just never hears back. Callers already treat this as fire-and-forget,
+    // so retrying here doesn't hold up any HTTP response.
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await gmailTransport.sendMail({
+          from: `Springhill Sherpa <${GMAIL_USER}>`,
+          to,
+          subject,
+          html,
+        });
+        return;
+      } catch (err) {
+        const lastAttempt = attempt === maxAttempts;
+        console.error(
+          `Failed to send email via Gmail SMTP (attempt ${attempt}/${maxAttempts})`,
+          err
+        );
+        if (!lastAttempt) await sleep(attempt * 3_000);
+      }
     }
+    return;
   }
 
   if (resend) {

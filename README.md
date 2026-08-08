@@ -205,9 +205,13 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 One **dedicated** Gmail account (not a personal inbox) can handle both directions, via
 `GMAIL_USER` / `GMAIL_APP_PASSWORD`:
 
-- **Outbound** — approval/revoke emails send through that account's own SMTP (`lib/email.ts`),
-  which works for any recipient with no domain to verify (unlike Resend's sandbox sender). Falls
-  back to Resend (`RESEND_API_KEY`) if set instead, or to console logging if neither is configured.
+- **Outbound** — approval/revoke/password-reset emails send through that account's own SMTP
+  (`lib/email.ts`), which works for any recipient with no domain to verify (unlike Resend's
+  sandbox sender). Falls back to Resend (`RESEND_API_KEY`) if set instead, or to console logging
+  if neither is configured. A single send is retried up to 3 times (short, capped connection
+  timeouts + a few seconds' backoff between attempts) before giving up — this absorbs the
+  occasional transient timeout connecting to Gmail's SMTP endpoint from a hosted platform, rather
+  than silently dropping the email.
 - **Inbound (ingestion)** — the backend polls that same inbox via IMAP (every
   `GMAIL_INGEST_POLL_MINUTES`, default 5) for unread mail whose subject contains
   `GMAIL_INGEST_SUBJECT_FILTER` (default `context`, case-insensitive) — so put "context" (or
