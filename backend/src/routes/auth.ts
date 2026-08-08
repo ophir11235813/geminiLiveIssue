@@ -7,6 +7,10 @@ import { adminEmailsConfigured, isConfiguredAdminEmail } from '../lib/adminEmail
 const router = Router();
 const COOKIE_NAME = 'session';
 const isProd = process.env.NODE_ENV === 'production';
+// A shared secret that proves someone signing up actually belongs to the
+// group, before they even reach the "pending admin approval" stage. Unset
+// means the gate is off (local dev doesn't need it configured).
+const SIGNUP_PASSPHRASE = process.env.SIGNUP_PASSPHRASE;
 
 const cookieOpts = {
   httpOnly: true,
@@ -17,12 +21,18 @@ const cookieOpts = {
 
 router.post('/signup', async (req, res, next) => {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, passphrase } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     if (String(password).length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    // Checked before touching the database at all — no reason to leak
+    // whether an email is already registered to someone who doesn't even
+    // have the passphrase.
+    if (SIGNUP_PASSPHRASE && String(passphrase || '').trim() !== SIGNUP_PASSPHRASE) {
+      return res.status(403).json({ error: 'Incorrect passphrase' });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();

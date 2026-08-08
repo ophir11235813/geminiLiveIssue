@@ -7,6 +7,7 @@ export default function Signup() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passphrase, setPassphrase] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -15,7 +16,7 @@ export default function Signup() {
     setError('');
     setSubmitting(true);
     try {
-      await signup(email, password);
+      await signup(email, password, passphrase);
       // ProtectedRoute sends approved users to chat and pending users to /pending.
       navigate('/');
     } catch (err: any) {
@@ -44,6 +45,17 @@ export default function Signup() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+          />
+        </label>
+        <label>
+          Group passphrase
+          <input
+            type="text"
+            autoComplete="off"
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
+            required
+            placeholder="Ask an admin if you don't have this"
           />
         </label>
         {error && <p className="error">{error}</p>}

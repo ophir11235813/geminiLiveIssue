@@ -106,6 +106,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `DATABASE_URL`     | yes      | Postgres connection string                                   |
 | `PGSSL`            | no       | `require` for hosted Postgres, `disable` for local (default) |
 | `JWT_SECRET`       | yes      | Long random string (`openssl rand -hex 32`)                  |
+| `SIGNUP_PASSPHRASE`| no       | Shared passphrase required at signup, proving group membership before an account even reaches "pending". Unset → no passphrase gate |
 | `ADMIN_EMAILS`     | no       | Comma-separated emails auto-granted admin (safety net, not the main path — see above). Unset → first signup becomes admin instead |
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
@@ -141,7 +142,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 
 | Endpoint                         | Auth            | Description                          |
 | --------------------------------- | ---------------- | -------------------------------------- |
-| `POST /auth/signup`               | —                 | Create account (pending, unless first user) |
+| `POST /auth/signup`               | —                 | Create account (pending, unless first user). Rejects with 403 if `SIGNUP_PASSPHRASE` is set and the wrong passphrase (or none) was submitted |
 | `POST /auth/login`                | —                 | Log in                                 |
 | `POST /auth/logout`               | —                 | Clear session                          |
 | `GET /auth/me`                    | any               | Current user                           |
