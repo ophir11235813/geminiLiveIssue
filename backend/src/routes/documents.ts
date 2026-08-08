@@ -11,7 +11,9 @@ router.use(requireAuth, requireApproved);
 router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT d.id, d.title, d.source_type, d.content, d.created_at, u.email AS uploader_email
+      `SELECT d.id, d.title, d.source_type, d.content, d.created_at,
+              d.sender, d.sent_at, d.flagged, d.flag_reason,
+              u.email AS uploader_email
        FROM documents d
        LEFT JOIN users u ON u.id = d.uploader_id
        ORDER BY d.created_at DESC`
@@ -51,7 +53,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
     const { rows } = await pool.query(
       `INSERT INTO documents (uploader_id, title, source_type, content)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, title, source_type, content, created_at`,
+       RETURNING id, title, source_type, content, created_at, sender, sent_at, flagged, flag_reason`,
       [req.user!.id, title, sourceType, content]
     );
     res.status(201).json({ document: { ...rows[0], uploader_email: req.user!.email } });

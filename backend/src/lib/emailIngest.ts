@@ -1,7 +1,7 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { pool } from '../db';
-import { describeImage, isSupportedImageType } from './claude';
+import { describeImage, extractRelevantEmailContext, isSupportedImageType } from './claude';
 
 // A dedicated Gmail inbox that people forward context to — polled on an
 // interval (not a webhook), so no domain or inbound-email service is
@@ -79,18 +79,40 @@ async function ingestMessage(client: ImapFlow, uid: number): Promise<void> {
   }
 
   const fromAddress = parsed.from?.text || 'unknown sender';
-  const content = bodyText.trim() || '(This email had no readable text content.)';
   const title = titleFromSubject(parsed.subject);
+  const sentAt = parsed.date || null;
+
+  // Extraction runs before anything is ever stored: keeps only what's
+  // actually relevant as school/Hideout/Springhill context, and strips out
+  // (never stores) anything that looks like an attempt to inject
+  // instructions into the assistant or an inappropriate joke aimed at it —
+  // that content never reaches the context store at all, only a flag noting
+  // it happened does.
+  const extraction = await extractRelevantEmailContext(parsed.subject || '(no subject)', bodyText || '(empty)');
+
+  if (!extraction.relevantContent && !extraction.flagged) {
+    // Nothing worth keeping and nothing worth flagging — skip it entirely
+    // rather than cluttering the Documents tab with an empty entry.
+    console.log(`Email ingestion: nothing relevant in "${title}", skipping`);
+    await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+    return;
+  }
+
+  const content =
+    extraction.relevantContent ||
+    '(No relevant context found in this email — see the flag for why it was still kept for review.)';
 
   // uploader_id stays NULL — there's no signed-in app user in the loop for
   // an automatically-ingested email; the frontend shows these as
   // "Auto-imported". Still fully editable/deletable by any admin afterward.
   await pool.query(
-    `INSERT INTO documents (uploader_id, title, source_type, content)
-     VALUES (NULL, $1, 'Email', $2)`,
-    [title, `From: ${fromAddress}\n\n${content}`]
+    `INSERT INTO documents (uploader_id, title, source_type, content, sender, sent_at, flagged, flag_reason)
+     VALUES (NULL, $1, 'Email', $2, $3, $4, $5, $6)`,
+    [title, content, fromAddress, sentAt, extraction.flagged, extraction.flagReason]
   );
-  console.log(`Email ingestion: saved "${title}" as a document`);
+  console.log(
+    `Email ingestion: saved "${title}" as a document${extraction.flagged ? ' (flagged)' : ''}`
+  );
 
   await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
 }

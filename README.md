@@ -164,7 +164,9 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 
 - **users** — `id`, `email`, `password_hash`, `status` (`pending`/`approved`/`revoked`), `role`
   (`admin`/`user`), `created_at`
-- **documents** — `id`, `uploader_id`, `title`, `source_type`, `content`, `created_at`
+- **documents** — `id`, `uploader_id`, `title`, `source_type`, `content`, `created_at`, plus
+  `sender`, `sent_at`, `flagged`, `flag_reason` (populated only for email-ingested documents; NULL/
+  false otherwise)
 - **chat_sessions** — `id`, `user_id`, `title`, `created_at`, `updated_at`. One row per
   conversation — a user can have many.
 - **chat_messages** — `id`, `user_id`, `session_id`, `role` (`user`/`assistant`), `content`,
@@ -207,11 +209,23 @@ One **dedicated** Gmail account (not a personal inbox) can handle both direction
   `GMAIL_INGEST_SUBJECT_FILTER` (default `context`, case-insensitive) — so put "context" (or
   whatever you've set it to) somewhere in the subject when forwarding, and everything else that
   lands in that inbox is left completely alone. Matches get saved as a document — source
-  type `Email`, title from the subject, body as the content, image attachments run through the
-  same vision extraction as a manual image upload. Processed messages are marked read so they
-  aren't re-ingested. These documents show up with uploader "Auto-imported" since there's no
-  signed-in app user in the loop, but any admin can still edit or delete them from the Documents
-  page like any other.
+  type `Email`, title from the subject, image attachments run through the same vision extraction
+  as a manual image upload. Processed messages are marked read so they aren't re-ingested. These
+  documents show up with uploader "Auto-imported" since there's no signed-in app user in the loop,
+  but any admin can still edit or delete them from the Documents page like any other.
+- **Filtered before it's ever stored.** Each email's body (plus any image descriptions) goes
+  through an extraction pass (`extractRelevantEmailContext` in `lib/claude.ts`) before saving:
+  only content genuinely relevant to the school/Hideout/Springhill context is kept — ordinary
+  irrelevant text is just dropped, no flag needed. Separately, anything that looks like an attempt
+  to inject instructions into the assistant, or an inappropriate joke aimed at it, is flagged
+  *and* excluded from the stored content — it never reaches the context store, only a note that it
+  happened does. If nothing relevant survives and nothing was flagged, no document is created at
+  all. Flagged documents show a red "⚠ Flagged" badge in the Documents list with the reason
+  visible on expand. This filtering only applies to email ingestion — manually pasted/uploaded
+  documents from approved users go straight in, unfiltered, same as always.
+- Documents from email also carry the original **sender** and **sent_at** (the email's own `Date:`
+  header, not when it happened to be polled) — shown in the Documents list instead of an uploader
+  name, since there's no app user behind an ingested email.
 
 Setup: create the dedicated Gmail account, turn on 2-Step Verification, generate an **App
 Password** at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (a

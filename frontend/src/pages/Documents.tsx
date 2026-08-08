@@ -9,6 +9,10 @@ interface Doc {
   content: string;
   created_at: string;
   uploader_email: string | null;
+  sender: string | null;
+  sent_at: string | null;
+  flagged: boolean;
+  flag_reason: string | null;
 }
 
 const SOURCE_TYPES = ['Conversation thread', 'Email', 'Flyer', 'Note', 'Other'];
@@ -151,12 +155,28 @@ export default function Documents() {
                   <div>
                     <strong>{d.title}</strong>
                     <span className="tag">{d.source_type}</span>
+                    {d.flagged && (
+                      <span className="flag-badge" title={d.flag_reason ?? 'Flagged content was excluded'}>
+                        ⚠ Flagged
+                      </span>
+                    )}
                   </div>
                   <span className="doc-meta">
-                    {d.uploader_email ?? 'Auto-imported'} · {new Date(d.created_at).toLocaleDateString()}
+                    {d.sender ? `From: ${d.sender}` : d.uploader_email ?? 'Auto-imported'} ·{' '}
+                    {new Date(d.sent_at ?? d.created_at).toLocaleString()}
                   </span>
                 </div>
-                {expanded === d.id && <pre className="doc-content">{d.content}</pre>}
+                {expanded === d.id && (
+                  <>
+                    {d.flagged && (
+                      <p className="flag-note">
+                        ⚠ Something in the original message was excluded as inappropriate:{' '}
+                        {d.flag_reason || 'no further detail recorded.'}
+                      </p>
+                    )}
+                    <pre className="doc-content">{d.content}</pre>
+                  </>
+                )}
                 {(user?.role === 'admin' || user?.email === d.uploader_email) && (
                   <button className="delete-btn" onClick={() => handleDelete(d.id)}>
                     Delete

@@ -774,6 +774,28 @@ button:disabled {
   border-radius: 999px;
 }
 
+.flag-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--danger);
+  background: var(--danger-light);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  cursor: help;
+}
+
+.flag-note {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.8rem;
+  background: var(--danger-light);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .doc-meta {
   color: var(--muted);
   font-size: 0.8rem;
