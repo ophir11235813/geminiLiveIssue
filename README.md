@@ -209,9 +209,12 @@ One **dedicated** Gmail account (not a personal inbox) can handle both direction
   (`lib/email.ts`), which works for any recipient with no domain to verify (unlike Resend's
   sandbox sender). Falls back to Resend (`RESEND_API_KEY`) if set instead, or to console logging
   if neither is configured. A single send is retried up to 3 times (short, capped connection
-  timeouts + a few seconds' backoff between attempts) before giving up — this absorbs the
-  occasional transient timeout connecting to Gmail's SMTP endpoint from a hosted platform, rather
-  than silently dropping the email.
+  timeouts + a few seconds' backoff between attempts) before giving up. It also resolves
+  `smtp.gmail.com` to a literal IPv4 address itself before connecting, rather than letting
+  nodemailer pick — nodemailer's own resolver fetches both the A and AAAA records and picks
+  between them at random, and on a host (like Railway) with no outbound IPv6 route, an AAAA pick
+  fails immediately with `ENETUNREACH`. This was the actual cause of some approval emails never
+  arriving.
 - **Inbound (ingestion)** — the backend polls that same inbox via IMAP (every
   `GMAIL_INGEST_POLL_MINUTES`, default 5) for unread mail whose subject contains
   `GMAIL_INGEST_SUBJECT_FILTER` (default `context`, case-insensitive) — so put "context" (or

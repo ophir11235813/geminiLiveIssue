@@ -1,7 +1,16 @@
 import 'dotenv/config';
+import dns from 'dns';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+
+// Railway's outbound network doesn't route IPv6 (seen in practice as
+// ENETUNREACH connecting to Gmail's SMTP endpoint on its AAAA address) even
+// though it happily hands one out via DNS. Preferring IPv4 results here
+// avoids that dead end for every outbound connection this process makes —
+// Gmail SMTP/IMAP, Anthropic, Resend, Postgres — not just the one that
+// happened to surface it first.
+dns.setDefaultResultOrder('ipv4first');
 
 import { pool } from './db';
 import { applyMigrations } from './lib/runMigrations';
