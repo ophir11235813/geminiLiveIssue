@@ -23,10 +23,35 @@ Rules:
 - When useful, mention which document (by title) the answer came from.
 - Be concise, warm, and practical — like a helpful family friend, not a formal assistant.`;
 
-export async function askClaude(question: string, contextText: string): Promise<string> {
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// `history` is the full conversation so far, ending with the newest user
+// turn — not just that one question. Without this, every message was being
+// answered with zero memory of what was already asked/answered in the same
+// chat.
+export async function askClaude(history: ChatTurn[], contextText: string): Promise<string> {
   const contextBlock = `--- CONTEXT DOCUMENTS START ---\n${
     contextText || '(no documents have been uploaded yet)'
   }\n--- CONTEXT DOCUMENTS END ---`;
+
+  // The second-to-last turn is the last one that was *already* part of a
+  // previous request (the last turn is always the brand-new question, which
+  // by definition has never been sent before, so caching it buys nothing).
+  // Marking that one cached means the next message in this same chat gets a
+  // cache hit on everything up through here, not just the system prompt.
+  const lastStableIndex = history.length - 2;
+
+  const messages = history.map((turn, i) =>
+    i === lastStableIndex
+      ? {
+          role: turn.role,
+          content: [{ type: 'text' as const, text: turn.content, cache_control: { type: 'ephemeral' as const } }],
+        }
+      : { role: turn.role, content: turn.content }
+  );
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -43,7 +68,7 @@ export async function askClaude(question: string, contextText: string): Promise<
         cache_control: { type: 'ephemeral' },
       },
     ],
-    messages: [{ role: 'user', content: question }],
+    messages,
   });
 
   const textBlock = response.content.find(

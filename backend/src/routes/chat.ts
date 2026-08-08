@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db';
 import { requireAuth, requireApproved } from '../middleware/auth';
-import { askClaude } from '../lib/claude';
+import { askClaude, ChatTurn } from '../lib/claude';
 
 const router = Router();
 router.use(requireAuth, requireApproved);
@@ -10,6 +10,11 @@ router.use(requireAuth, requireApproved);
 // No RAG/embeddings needed at this data volume — we just concatenate everything that fits.
 const MAX_CONTEXT_CHARS = 150_000;
 const MAX_TITLE_LENGTH = 50;
+// Safety cap on how much prior conversation gets resent to Claude — the full
+// chat is still stored and shown in the UI regardless; this only bounds what
+// goes into each API call so a very long-running chat can't blow the context
+// window. 40 turns (20 back-and-forths) is generous for this app's use.
+const MAX_HISTORY_TURNS = 40;
 
 function titleFromMessage(message: string): string {
   const trimmed = message.trim().replace(/\s+/g, ' ');
@@ -95,12 +100,19 @@ router.post('/messages', async (req, res, next) => {
     // empty orphaned session the frontend never learns the ID of, and a
     // retry (which also omits sessionId, since the client never found out)
     // would create yet another one on top of it.
+    let priorTurns: ChatTurn[] = [];
     if (sessionId) {
       const { rows } = await pool.query(
         'SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2',
         [sessionId, req.user!.id]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Chat not found' });
+
+      const { rows: historyRows } = await pool.query(
+        'SELECT role, content FROM chat_messages WHERE session_id = $1 ORDER BY created_at ASC',
+        [sessionId]
+      );
+      priorTurns = historyRows.slice(-MAX_HISTORY_TURNS);
     }
 
     const { rows: docs } = await pool.query(
@@ -116,7 +128,7 @@ router.post('/messages', async (req, res, next) => {
       contextText += chunk;
     }
 
-    const reply = await askClaude(message, contextText);
+    const reply = await askClaude([...priorTurns, { role: 'user', content: message }], contextText);
 
     let activeSessionId: string = sessionId;
     if (!activeSessionId) {
