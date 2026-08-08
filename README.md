@@ -111,6 +111,8 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `CLIENT_ORIGIN`    | yes      | Frontend origin, for CORS + cookies                            |
 | `APP_URL`          | no       | Frontend URL used in email copy                                |
 | `PORT`             | no       | Defaults to 4000                                                |
+| `GMAIL_INGEST_USER` / `GMAIL_INGEST_APP_PASSWORD` | no | A dedicated Gmail inbox to poll for forwarded context (see below). Both unset → disabled |
+| `GMAIL_INGEST_POLL_MINUTES` | no | How often to check that inbox. Defaults to 5                  |
 
 **frontend/.env**
 
@@ -168,9 +170,12 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 - No vector DB — every chat request concatenates all documents (capped at ~150k characters) and
   sends them straight to Claude as context. Fine at small scale; if the corpus grows a lot, add
   keyword filtering before that call.
-- **Prompt caching** — the document context (the bulk, mostly-unchanged part of the prompt) is
-  sent with `cache_control: { type: 'ephemeral' }`, so follow-up questions in the same chat reuse
-  it via Anthropic's prompt cache instead of reprocessing the full context every turn.
+- **Real conversation threading** — each chat sends its *full* prior message history to Claude
+  (capped at the last 40 turns as a safety bound; the full chat is still stored/shown regardless),
+  not just the newest question in isolation, so follow-ups like "what did I just ask?" work.
+- **Prompt caching** — both the document context and the growing conversation history use
+  `cache_control: { type: 'ephemeral' }`, so each new message in a chat reuses the cached prefix
+  from the previous request instead of reprocessing everything from scratch every turn.
 - **System prompt** carries fixed context that this is for a family whose kids attend Springhill
   Elementary (Lafayette, CA) and Hideout (an after-school program) — overridable via the
   `SCHOOL_CONTEXT` env var without a code change.
@@ -178,7 +183,21 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
   once at upload time; the returned transcription/description is stored as the document's text
   content, and the image bytes themselves are discarded (never stored). `.txt` and `.pdf` uploads
   are still extracted directly, no LLM call needed for those.
-- No Gmail integration — content is added manually via the Documents page, as specified.
+
+## Email-to-context ingestion (optional)
+
+Point a **dedicated** Gmail inbox (not your personal one) at `GMAIL_INGEST_USER` /
+`GMAIL_INGEST_APP_PASSWORD` and the backend polls it (every `GMAIL_INGEST_POLL_MINUTES`, default
+5) for unread mail, saving each one as a document — source type `Email`, title from the subject,
+body as the content, image attachments run through the same vision extraction as a manual image
+upload. Processed messages are marked read so they aren't re-ingested. These documents show up
+with uploader "Auto-imported" since there's no signed-in app user in the loop, but any admin can
+still edit or delete them from the Documents page like any other.
+
+Setup: create the dedicated Gmail account, turn on 2-Step Verification, generate an **App
+Password** at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (a
+regular Gmail password won't work for this), and set the two env vars. Leave both unset to disable
+this entirely — nothing else about the app depends on it.
 
 ## Feels like an app, not a website
 

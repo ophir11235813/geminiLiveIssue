@@ -153,7 +153,7 @@ export default function Documents() {
                     <span className="tag">{d.source_type}</span>
                   </div>
                   <span className="doc-meta">
-                    {d.uploader_email ?? 'unknown'} · {new Date(d.created_at).toLocaleDateString()}
+                    {d.uploader_email ?? 'Auto-imported'} · {new Date(d.created_at).toLocaleDateString()}
                   </span>
                 </div>
                 {expanded === d.id && <pre className="doc-content">{d.content}</pre>}

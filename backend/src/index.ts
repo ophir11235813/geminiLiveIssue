@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 
 import { pool } from './db';
 import { applyMigrations } from './lib/runMigrations';
+import { startEmailIngestPolling } from './lib/emailIngest';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import documentsRoutes from './routes/documents';
@@ -78,6 +79,8 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`Springhill Sherpa API listening on port ${PORT}`);
   });
+
+  startEmailIngestPolling();
 }
 
 start();
