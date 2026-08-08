@@ -1,35 +1,44 @@
 :root {
-  /* Warm, bright neutral base — not stark white/gray */
-  --bg: #faf9f5;
-  --surface: #ffffff;
-  --surface-alt: #f3f1ea;
-  --border: #e6e1d3;
-  --text: #211f1b;
-  --muted: #716c60;
-  --muted-light: #a19b8c;
+  /* Dark, warm base — "trail at dusk," not a default gray/near-black dark
+     mode. Each surface a step lighter than the last (bg < surface <
+     surface-alt) so cards read as distinct layers even without much
+     contrast to spare. */
+  --bg: #0e0b08;
+  --surface: #1a1510;
+  --surface-alt: #272016;
+  --border: #3a3122;
+  --text: #f5efe3;
+  --muted: #a89b86;
+  --muted-light: #6f6555;
 
-  /* Brand: confident teal, not another purple-gradient AI look */
-  --brand: #0d8577;
-  --brand-dark: #0a685d;
-  --brand-light: #e2f3f0;
-  --brand-contrast: #ffffff;
+  /* Brand: a confident sunrise amber — ties to the Sherpa/trail identity,
+     and reads as intentional against dark surfaces instead of another
+     purple-gradient AI-tool look. */
+  --brand: #f2a93b;
+  --brand-dark: #d68a1f;
+  --brand-light: #3a2c12;
+  --brand-contrast: #1a1006;
+  /* Same amber, for glows (focus rings, button hover) — a flat dark tint
+     doesn't read as "glowing" the way a translucent bright one does. */
+  --brand-glow: rgba(242, 169, 59, 0.35);
 
-  /* Warm amber accent for tags/highlights */
-  --accent: #e07a2c;
-  --accent-light: #fbe8d4;
+  /* Cool mint-teal as the secondary accent — a warm/cool pair instead of
+     one color doing every job (tags, admin badges, ...). */
+  --accent: #5fd3c4;
+  --accent-light: #12302c;
 
-  --danger: #c4453a;
-  --danger-light: #fbeae8;
+  --danger: #ff6b5b;
+  --danger-light: #3a1712;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
 
-  --shadow-sm: 0 1px 2px rgba(33, 31, 27, 0.06), 0 1px 1px rgba(33, 31, 27, 0.04);
-  --shadow-md: 0 6px 20px rgba(33, 31, 27, 0.08);
-  --shadow-lg: 0 16px 40px rgba(33, 31, 27, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
 
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 * {
@@ -293,7 +302,7 @@ textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brand-light);
+  box-shadow: 0 0 0 3px var(--brand-glow);
 }
 
 textarea {
@@ -316,6 +325,7 @@ button[type='submit'],
 button[type='submit']:not(:disabled):hover,
 .auth-card > button:not(:disabled):hover {
   background: var(--brand-dark);
+  box-shadow: 0 0 0 4px var(--brand-glow);
 }
 
 button:disabled {
@@ -598,7 +608,10 @@ button:disabled {
 }
 
 .bubble.assistant code {
-  background: rgba(33, 31, 27, 0.08);
+  /* A light-on-dark tint, not a dark-on-light one — the assistant bubble
+     itself is already dark (--surface-alt), so code needs to read as a
+     lighter patch, not a darker one. */
+  background: rgba(245, 239, 227, 0.08);
   border-radius: 4px;
   padding: 0.1em 0.35em;
   font-size: 0.9em;
@@ -606,7 +619,10 @@ button:disabled {
 }
 
 .bubble.assistant pre {
-  background: rgba(33, 31, 27, 0.08);
+  /* A light-on-dark tint, not a dark-on-light one — the assistant bubble
+     itself is already dark (--surface-alt), so code needs to read as a
+     lighter patch, not a darker one. */
+  background: rgba(245, 239, 227, 0.08);
   border-radius: var(--radius-sm);
   padding: 0.7em 0.85em;
   overflow-x: auto;
@@ -771,7 +787,10 @@ button:disabled {
 }
 
 .doc-item:hover {
+  /* A black shadow barely registers against an already-dark background —
+     brightening the border is what actually reads as "hovered" here. */
   box-shadow: var(--shadow-sm);
+  border-color: var(--muted-light);
 }
 
 .doc-header {

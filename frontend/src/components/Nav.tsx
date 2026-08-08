@@ -6,10 +6,9 @@ function Logo() {
     <span className="brand">
       <span className="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M4 5.5C4 4.67 4.67 4 5.5 4h13c.83 0 1.5.67 1.5 1.5v9c0 .83-.67 1.5-1.5 1.5H9l-3.8 3.2c-.5.4-1.2.05-1.2-.6V16h-.5c-.83 0-1.5-.67-1.5-1.5v-9Z"
-            fill="currentColor"
-          />
+          {/* A twin-peak mountain, not a generic chat bubble — the "Sherpa"
+              in Springhill Sherpa deserves a mark that actually says so. */}
+          <path d="M3 19 L8 6 L11 12 L15 4 L21 19 Z" fill="currentColor" />
         </svg>
       </span>
       <span className="brand-word">Springhill Sherpa</span>
