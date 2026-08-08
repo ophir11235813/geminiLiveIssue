@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pool } from '../db';
 import { requireAuth, requireApproved } from '../middleware/auth';
 import { askClaude, ChatTurn } from '../lib/claude';
+import { formatDateTime } from '../lib/dates';
 
 const router = Router();
 router.use(requireAuth, requireApproved);
@@ -116,14 +117,20 @@ router.post('/messages', async (req, res, next) => {
     }
 
     const { rows: docs } = await pool.query(
-      'SELECT title, source_type, content, created_at FROM documents ORDER BY created_at DESC'
+      'SELECT title, source_type, content, created_at, sent_at FROM documents ORDER BY created_at DESC'
     );
 
     let contextText = '';
     for (const doc of docs) {
-      const chunk = `\n\n### ${doc.title} (${doc.source_type}, added ${new Date(
-        doc.created_at
-      ).toLocaleDateString()})\n${doc.content}`;
+      // sent_at is the email's own Date: header for ingested messages — the
+      // actual moment the content is *about*, not when it happened to be
+      // polled/forwarded. Falls back to created_at for anything else (a
+      // manually pasted/uploaded document has no other "shared" time).
+      // Told to the model so it can anchor a document's own relative-time
+      // language ("this Wednesday") to when it was actually shared, not to
+      // today — see buildSystemInstructions in lib/claude.ts.
+      const sharedAt = doc.sent_at ?? doc.created_at;
+      const chunk = `\n\n### ${doc.title} (${doc.source_type}, shared ${formatDateTime(sharedAt)})\n${doc.content}`;
       if (contextText.length + chunk.length > MAX_CONTEXT_CHARS) break;
       contextText += chunk;
     }

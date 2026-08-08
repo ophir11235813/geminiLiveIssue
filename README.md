@@ -116,6 +116,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
 | `SCHOOL_CONTEXT`   | no       | One line of fixed context given to the model on every question (defaults to the Springhill Elementary / Hideout description) |
+| `SCHOOL_TIMEZONE`  | no       | IANA timezone (e.g. `America/Los_Angeles`, the default) used to format every date/time shown to the model — a document's "shared" timestamp and today's date in the system prompt |
 | `SENDGRID_API_KEY` | no       | Preferred outbound email sender (HTTPS, not SMTP — see "Decisions" above). Needs a Single Sender verified in SendGrid |
 | `SENDGRID_FROM_EMAIL` | no     | Must match the address verified as your SendGrid Single Sender. Defaults to `GMAIL_USER` if unset |
 | `GMAIL_USER` / `GMAIL_APP_PASSWORD` | no | A dedicated Gmail account (App Password, not the real password) used for email-to-context ingestion, and as an SMTP fallback for outbound if SendGrid isn't configured (see below). Both unset → ingestion is disabled |
@@ -203,10 +204,21 @@ the subject keyword in the subject line. No upload form, no list, nothing to cli
   not just the newest question in isolation, so follow-ups like "what did I just ask?" work.
 - **Prompt caching** — both the document context and the growing conversation history use
   `cache_control: { type: 'ephemeral' }`, so each new message in a chat reuses the cached prefix
-  from the previous request instead of reprocessing everything from scratch every turn.
+  from the previous request instead of reprocessing everything from scratch every turn. This is
+  why today's date in the system prompt is deliberately day-precision only, not hour/minute — that
+  text sits ahead of the cache breakpoint, so anything finer would bust the cache on almost every
+  message for a precision this feature doesn't need anyway.
 - **System prompt** carries fixed context that this is for a family whose kids attend Springhill
   Elementary (Lafayette, CA) and Hideout (an after-school program) — overridable via the
   `SCHOOL_CONTEXT` env var without a code change.
+- **Dates are contextualized, not just today's** — each document's header in the context block
+  reads "shared <weekday, date, time>" using `sent_at` (an ingested email's own `Date:` header)
+  falling back to `created_at`, formatted in `SCHOOL_TIMEZONE` (`lib/dates.ts`). The system prompt
+  also carries today's date (day precision only — see caching note below) and an explicit rule:
+  a relative time reference *inside a document* ("this Wednesday", "tomorrow") is anchored to that
+  document's own shared date, not today, while a relative reference *in the user's question* is
+  anchored to today. Without this, an old forwarded email saying "the fair is this Friday" would
+  get answered as if it meant the Friday coming up now, not the one it actually meant.
 - **Answers never name individuals** — the system prompt instructs the model to report only the
   factual content of a document, never who said/wrote it, even though names are often present in
   the raw source material (a conversation thread, an email signature). This only governs what the

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { formatDate } from './dates';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
@@ -10,22 +11,39 @@ const SCHOOL_CONTEXT =
   "This family's children attend Springhill Elementary School in Lafayette, California, and also " +
     'participate in Hideout, an after-school program.';
 
-const SYSTEM_INSTRUCTIONS = `You are Springhill Sherpa, a helpful assistant for a family/school group.
+// Built fresh per request (not a static constant) because it embeds the
+// current date/time — a document mentioning "this Friday" and a user asking
+// "what's this Friday" both need Claude to know what day it actually is.
+// Each context document below is separately timestamped with when it was
+// originally shared (see chat.ts), so the model can anchor a document's own
+// relative-time language to that instead of to today.
+function buildSystemInstructions(): string {
+  return `You are Springhill Sherpa, a helpful assistant for a family/school group.
 ${SCHOOL_CONTEXT}
 
+Today's date is ${formatDate(new Date())}.
+
 Answer questions using ONLY the context documents provided below (conversation thread exports,
-forwarded emails, flyers, notes, photos, etc).
+forwarded emails, flyers, notes, photos, etc). Each document is labeled with when it was
+originally shared.
 
 Rules:
 - Base your answer only on the provided context — do not make things up.
 - If the answer isn't in the context, say clearly that you don't have that information yet,
   rather than guessing.
 - When useful, mention which document (by title) the answer came from.
+- Every context document is timestamped with when it was originally shared. When a document's
+  text uses a relative time reference ("on Wednesday", "tomorrow", "next week", "this Friday"),
+  interpret it relative to THAT document's own timestamp, not today's date — a document shared
+  three months ago saying "this Friday" means the Friday nearest to when it was shared, not this
+  coming Friday. When the user's own question uses a relative time reference, interpret that
+  relative to today's date, given above.
 - Never mention or reference any specific person's name in your answer, even if names appear in
   the source material (e.g. who sent a message, who wrote an email, a signature). Report only the
   factual information itself, stripped of who said it. For example, say "Pickup is at 3pm" — never
   "According to [name], pickup is at 3pm" or "[name] said pickup is at 3pm."
 - Be concise, warm, and practical — like a helpful family friend, not a formal assistant.`;
+}
 
 export interface ChatTurn {
   role: 'user' | 'assistant';
@@ -61,7 +79,7 @@ export async function askClaude(history: ChatTurn[], contextText: string): Promi
     model: MODEL,
     max_tokens: 1024,
     system: [
-      { type: 'text', text: SYSTEM_INSTRUCTIONS },
+      { type: 'text', text: buildSystemInstructions() },
       {
         type: 'text',
         text: contextBlock,
