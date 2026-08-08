@@ -70,3 +70,13 @@ export function sendRevokeEmail(to: string): Promise<void> {
      <p>If you believe this is a mistake, please contact the admin.</p>`
   );
 }
+
+export function sendPasswordResetEmail(to: string, resetLink: string): Promise<void> {
+  return send(
+    to,
+    'Reset your password — Springhill Sherpa',
+    `<p>Someone (hopefully you) asked to reset the password for this account.</p>
+     <p><a href="${resetLink}">Click here to set a new password</a> — this link works for 1 hour.</p>
+     <p>If you didn't request this, you can safely ignore this email — your password won't change.</p>`
+  );
+}

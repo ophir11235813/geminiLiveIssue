@@ -117,7 +117,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `RESEND_API_KEY`   | no       | Fallback outbound sender if `GMAIL_USER` isn't set. Omit both to just log emails to the console |
 | `FROM_EMAIL`       | no       | Sender address when using the Resend fallback                 |
 | `CLIENT_ORIGIN`    | yes      | Frontend origin, for CORS + cookies                            |
-| `APP_URL`          | no       | Frontend URL used in email copy                                |
+| `APP_URL`          | no       | Frontend URL used in email copy (login link, password reset link) |
 | `PORT`             | no       | Defaults to 4000                                                |
 
 **frontend/.env**
@@ -144,6 +144,8 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | --------------------------------- | ---------------- | -------------------------------------- |
 | `POST /auth/signup`               | —                 | Create account (pending, unless first user). Rejects with 403 if `SIGNUP_PASSPHRASE` is set and the wrong passphrase (or none) was submitted |
 | `POST /auth/login`                | —                 | Log in                                 |
+| `POST /auth/forgot-password`      | —                 | Email a password reset link if the address has an account (same response either way, to avoid leaking who's registered) |
+| `POST /auth/reset-password`       | —                 | Set a new password from a reset token (1 hour expiry, single use) |
 | `POST /auth/logout`               | —                 | Clear session                          |
 | `GET /auth/me`                    | any               | Current user                           |
 | `GET /admin/users?status=`        | admin             | List users by status                   |
@@ -164,7 +166,8 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 ## Data model
 
 - **users** — `id`, `email`, `password_hash`, `status` (`pending`/`approved`/`revoked`), `role`
-  (`admin`/`user`), `created_at`
+  (`admin`/`user`), `created_at`, plus `reset_token_hash`/`reset_token_expires_at` (only set while
+  a password reset request is pending; a raw token is never stored, only its SHA-256 hash)
 - **documents** — `id`, `uploader_id`, `title`, `source_type`, `content`, `created_at`, plus
   `sender`, `sent_at`, `flagged`, `flag_reason` (populated only for email-ingested documents; NULL/
   false otherwise)

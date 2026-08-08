@@ -14,6 +14,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, passphrase: string) => Promise<void>;
   logout: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (token: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -60,8 +62,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function forgotPassword(email: string) {
+    await api.post('/auth/forgot-password', { email });
+  }
+
+  async function resetPassword(token: string, password: string) {
+    await api.post('/auth/reset-password', { token, password });
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{ user, loading, login, signup, logout, forgotPassword, resetPassword }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
 }
 

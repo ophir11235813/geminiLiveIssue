@@ -1,16 +1,24 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { pool } from '../db';
 import { signToken, requireAuth } from '../middleware/auth';
 import { adminEmailsConfigured, isConfiguredAdminEmail } from '../lib/adminEmails';
+import { sendPasswordResetEmail } from '../lib/email';
 
 const router = Router();
 const COOKIE_NAME = 'session';
 const isProd = process.env.NODE_ENV === 'production';
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 // A shared secret that proves someone signing up actually belongs to the
 // group, before they even reach the "pending admin approval" stage. Unset
 // means the gate is off (local dev doesn't need it configured).
 const SIGNUP_PASSPHRASE = process.env.SIGNUP_PASSPHRASE;
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 const cookieOpts = {
   httpOnly: true,
@@ -107,6 +115,68 @@ router.post('/login', async (req, res, next) => {
     const token = signToken(user.id);
     res.cookie(COOKIE_NAME, token, cookieOpts);
     res.json({ user: { id: user.id, email: user.email, status: user.status, role: user.role }, token });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+    const user = rows[0];
+
+    // Always the same response whether or not the account exists — otherwise
+    // this endpoint becomes a way to check who's registered.
+    if (user) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+      await pool.query('UPDATE users SET reset_token_hash = $1, reset_token_expires_at = $2 WHERE id = $3', [
+        hashToken(rawToken),
+        expiresAt,
+        user.id,
+      ]);
+      const resetLink = `${APP_URL}/reset-password?token=${rawToken}`;
+      sendPasswordResetEmail(normalizedEmail, resetLink).catch(() => {});
+    }
+
+    res.json({ ok: true, message: "If that email has an account, we've sent a reset link." });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id FROM users WHERE reset_token_hash = $1 AND reset_token_expires_at > now()`,
+      [hashToken(String(token))]
+    );
+    const user = rows[0];
+    if (!user) {
+      return res.status(400).json({ error: 'This reset link is invalid or has expired. Request a new one.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `UPDATE users SET password_hash = $1, reset_token_hash = NULL, reset_token_expires_at = NULL WHERE id = $2`,
+      [passwordHash, user.id]
+    );
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
