@@ -4,11 +4,42 @@ import dns from 'dns';
 
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
-// Gmail SMTP is preferred: it sends from a real inbox with no domain
-// verification required, unlike Resend's sandbox sender (which can only
-// deliver to the Resend account's own address without a verified domain —
-// a real wall we hit before this was added). Same account/app-password as
-// the email-ingestion feature, reused here for the opposite direction.
+// SendGrid is preferred: it sends over HTTPS (their REST API), not raw SMTP.
+// Gmail SMTP (below) turned out to be unreliable from Railway even after
+// fixing the IPv4/IPv6 DNS issue — repeated ETIMEDOUT connecting on port 465
+// regardless of which literal IP was tried, which points to Railway's
+// network throttling/blocking outbound SMTP itself (a known pattern on PaaS
+// hosts, done to cut down on spam origination). HTTPS doesn't hit that wall.
+// Needs a "Single Sender" verified in SendGrid (just click a confirmation
+// link sent to that inbox — no domain purchase/DNS setup required), then an
+// API key. See README for setup steps.
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || process.env.GMAIL_USER;
+const sendgridConfigured = Boolean(SENDGRID_API_KEY && SENDGRID_FROM_EMAIL);
+
+async function sendViaSendGrid(to: string, subject: string, html: string): Promise<void> {
+  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SENDGRID_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: SENDGRID_FROM_EMAIL, name: 'Springhill Sherpa' },
+      subject,
+      content: [{ type: 'text/html', value: html }],
+    }),
+  });
+  if (!res.ok) {
+    // SendGrid puts the useful detail in the body, not the status line.
+    const body = await res.text().catch(() => '');
+    throw new Error(`SendGrid responded ${res.status}: ${body}`);
+  }
+}
+
+// Gmail SMTP: kept as a fallback for anyone who'd rather not sign up for
+// SendGrid, or is running somewhere that doesn't block outbound SMTP.
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 const gmailConfigured = Boolean(GMAIL_USER && GMAIL_APP_PASSWORD);
@@ -58,42 +89,56 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Resend stays supported as a fallback for anyone who'd rather use it (or
-// already has a verified domain there) — just no longer the default.
+async function sendViaGmailSmtp(to: string, subject: string, html: string): Promise<void> {
+  // A transactional email (approval, revoke, password reset) is worth a
+  // couple of retries — a bare network timeout shouldn't mean the user just
+  // never hears back. Re-resolving the IP on each attempt also means a
+  // retry isn't doomed to hit the same bad address as the one that just
+  // failed.
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const ipv4Host = await resolveGmailSmtpIPv4();
+      const transport = createGmailTransport(ipv4Host);
+      await transport.sendMail({ from: `Springhill Sherpa <${GMAIL_USER}>`, to, subject, html });
+      return;
+    } catch (err) {
+      const lastAttempt = attempt === maxAttempts;
+      console.error(`Failed to send email via Gmail SMTP (attempt ${attempt}/${maxAttempts})`, err);
+      if (!lastAttempt) await sleep(attempt * 3_000);
+      else throw err;
+    }
+  }
+}
+
+// Resend stays supported as a further fallback for anyone who'd rather use
+// it (or already has a verified domain there) — just not the default, since
+// its sandbox sender can only deliver to the Resend account's own address
+// without a verified domain.
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 const RESEND_FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
 
 async function send(to: string, subject: string, html: string): Promise<void> {
-  if (gmailConfigured) {
-    // A transactional email (approval, revoke, password reset) is worth a
-    // couple of retries — a bare network timeout shouldn't mean the user
-    // just never hears back. Callers already treat this as fire-and-forget,
-    // so retrying here doesn't hold up any HTTP response. Re-resolving the
-    // IP on each attempt also means a retry isn't doomed to hit the same bad
-    // address as the one that just failed.
-    const maxAttempts = 3;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const ipv4Host = await resolveGmailSmtpIPv4();
-        const transport = createGmailTransport(ipv4Host);
-        await transport.sendMail({
-          from: `Springhill Sherpa <${GMAIL_USER}>`,
-          to,
-          subject,
-          html,
-        });
-        return;
-      } catch (err) {
-        const lastAttempt = attempt === maxAttempts;
-        console.error(
-          `Failed to send email via Gmail SMTP (attempt ${attempt}/${maxAttempts})`,
-          err
-        );
-        if (!lastAttempt) await sleep(attempt * 3_000);
-      }
+  if (sendgridConfigured) {
+    try {
+      await sendViaSendGrid(to, subject, html);
+      return;
+    } catch (err) {
+      console.error('Failed to send email via SendGrid', err);
+      // Fall through to Gmail SMTP/Resend below rather than giving up —
+      // costs nothing since those are still fire-and-forget from the
+      // caller's perspective.
     }
-    return;
+  }
+
+  if (gmailConfigured) {
+    try {
+      await sendViaGmailSmtp(to, subject, html);
+      return;
+    } catch {
+      // Already logged per-attempt inside sendViaGmailSmtp.
+    }
   }
 
   if (resend) {

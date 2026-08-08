@@ -20,13 +20,18 @@ backed by the Claude API, an admin dashboard, and approval/revoke emails.
 
 ### Decisions made on the spec's open questions
 
-- **Email provider: Gmail SMTP (via a dedicated account), Resend as a fallback.** Resend was the
+- **Email provider: SendGrid preferred, Gmail SMTP and Resend as fallbacks.** Resend was the
   original pick, but its sandbox sender can only deliver to the Resend account's own address
   without a verified domain — a real wall for a deployment with no domain. Sending through a
-  dedicated Gmail account's own SMTP (an App Password, not the real account password) sidesteps
-  that entirely and doubles as the account used for email-to-context ingestion below. If neither
-  `GMAIL_USER`/`GMAIL_APP_PASSWORD` nor `RESEND_API_KEY` are set, emails are just logged to the
-  console — the app still works without either configured (handy for local dev).
+  dedicated Gmail account's own SMTP (an App Password, not the real account password) sidestepped
+  that and doubles as the account used for email-to-context ingestion below — but raw SMTP itself
+  turned out to be unreliable from at least Railway (repeated connection timeouts on port 465,
+  independent of the IPv4-vs-IPv6 issue also fixed here — see "Gmail" section below), which looks
+  like the platform throttling/blocking outbound SMTP. SendGrid sends over HTTPS instead (their
+  REST API), which doesn't hit that wall, and only needs a "Single Sender" verified — no domain
+  purchase — so it's now the default when `SENDGRID_API_KEY` is set. If nothing is configured,
+  emails are just logged to the console — the app still works with none of this set up (handy for
+  local dev).
 - **Backend hosting: a standalone Express server**, not Vercel serverless functions. It needs a
   persistent Postgres connection pool and file uploads (multer), which fit a normal long-running
   server better than serverless. A `Dockerfile` is included so it can go on Railway, Render, Fly,
@@ -111,10 +116,12 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
 | `SCHOOL_CONTEXT`   | no       | One line of fixed context given to the model on every question (defaults to the Springhill Elementary / Hideout description) |
-| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | no | A dedicated Gmail account (App Password, not the real password) used for both outbound email and email-to-context ingestion (see below). Both unset → outbound falls back to Resend/console, ingestion is disabled |
+| `SENDGRID_API_KEY` | no       | Preferred outbound email sender (HTTPS, not SMTP — see "Decisions" above). Needs a Single Sender verified in SendGrid |
+| `SENDGRID_FROM_EMAIL` | no     | Must match the address verified as your SendGrid Single Sender. Defaults to `GMAIL_USER` if unset |
+| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | no | A dedicated Gmail account (App Password, not the real password) used for email-to-context ingestion, and as an SMTP fallback for outbound if SendGrid isn't configured (see below). Both unset → ingestion is disabled |
 | `GMAIL_INGEST_POLL_MINUTES` | no | How often to check that inbox for forwarded context. Defaults to 5 |
 | `GMAIL_INGEST_SUBJECT_FILTER` | no | Only unread mail whose subject contains this (case-insensitive) gets ingested; everything else in the inbox is left untouched. Defaults to `context` |
-| `RESEND_API_KEY`   | no       | Fallback outbound sender if `GMAIL_USER` isn't set. Omit both to just log emails to the console |
+| `RESEND_API_KEY`   | no       | Last-resort outbound sender if neither SendGrid nor Gmail are set. Omit all three to just log emails to the console |
 | `FROM_EMAIL`       | no       | Sender address when using the Resend fallback                 |
 | `CLIENT_ORIGIN`    | yes      | Frontend origin, for CORS + cookies                            |
 | `APP_URL`          | no       | Frontend URL used in email copy (login link, password reset link) |
@@ -210,21 +217,34 @@ the subject keyword in the subject line. No upload form, no list, nothing to cli
   content, and the image bytes themselves are discarded (never stored). `.txt` and `.pdf` uploads
   are still extracted directly, no LLM call needed for those.
 
-## Gmail: outbound email + email-to-context ingestion (optional)
+## Outbound email: SendGrid, Gmail SMTP fallback, Resend last resort
 
-One **dedicated** Gmail account (not a personal inbox) can handle both directions, via
-`GMAIL_USER` / `GMAIL_APP_PASSWORD`:
+`lib/email.ts`'s `send()` tries each configured provider in order, falling through to the next on
+failure, and only logs to the console if nothing is configured or every provider fails:
 
-- **Outbound** — approval/revoke/password-reset emails send through that account's own SMTP
-  (`lib/email.ts`), which works for any recipient with no domain to verify (unlike Resend's
-  sandbox sender). Falls back to Resend (`RESEND_API_KEY`) if set instead, or to console logging
-  if neither is configured. A single send is retried up to 3 times (short, capped connection
-  timeouts + a few seconds' backoff between attempts) before giving up. It also resolves
-  `smtp.gmail.com` to a literal IPv4 address itself before connecting, rather than letting
-  nodemailer pick — nodemailer's own resolver fetches both the A and AAAA records and picks
-  between them at random, and on a host (like Railway) with no outbound IPv6 route, an AAAA pick
-  fails immediately with `ENETUNREACH`. This was the actual cause of some approval emails never
-  arriving.
+1. **SendGrid** (`SENDGRID_API_KEY` / `SENDGRID_FROM_EMAIL`) — sends over HTTPS (their REST API),
+   not SMTP. This is the recommended option. Setup: sign up at sendgrid.com, verify a **Single
+   Sender** (click the confirmation link sent to that inbox — no domain purchase or DNS record
+   needed), create an API key with "Mail Send" permission, set both env vars. `SENDGRID_FROM_EMAIL`
+   must exactly match the address you verified.
+2. **Gmail SMTP** (`GMAIL_USER` / `GMAIL_APP_PASSWORD`, same account as ingestion below) — a
+   single send is retried up to 3 times (short, capped connection timeouts + a few seconds'
+   backoff) before giving up, and resolves `smtp.gmail.com` to a literal IPv4 address itself before
+   connecting rather than letting nodemailer pick — nodemailer's own resolver fetches both the A
+   and AAAA records and picks between them at random, and on a host with no outbound IPv6 route
+   (Railway, for one), an AAAA pick fails immediately with `ENETUNREACH`. Even after that fix,
+   though, Railway specifically still timed out on port 465 fairly often — raw SMTP appears to be
+   throttled/blocked outbound on that platform regardless of destination IP, which is why SendGrid
+   is now preferred. Gmail SMTP is kept as a fallback for hosts that don't have that problem.
+3. **Resend** (`RESEND_API_KEY` / `FROM_EMAIL`) — last resort; its sandbox sender can only deliver
+   to the Resend account's own address without a verified domain, a real limitation for a
+   deployment with no domain.
+
+## Gmail: email-to-context ingestion (optional)
+
+The same dedicated Gmail account used for the SMTP fallback above (`GMAIL_USER` /
+`GMAIL_APP_PASSWORD`) also handles inbound ingestion:
+
 - **Inbound (ingestion)** — the backend polls that same inbox via IMAP (every
   `GMAIL_INGEST_POLL_MINUTES`, default 5) for unread mail whose subject contains
   `GMAIL_INGEST_SUBJECT_FILTER` (default `context`, case-insensitive) — so put "context" (or
