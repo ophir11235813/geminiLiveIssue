@@ -1,8 +1,8 @@
 # Springhill Sherpa
 
 A private, invite-only web app for a family/school group. An admin approves who gets in; approved
-members upload context (WhatsApp exports, forwarded emails, flyers) and ask a chatbot questions
-about it. No vector DB — the context is small enough to hand to Claude directly.
+members upload context (conversation thread exports, forwarded emails, flyers) and ask a chatbot
+questions about it. No vector DB — the context is small enough to hand to Claude directly.
 
 Implements the spec in full: approval-gated auth, document upload/management, a chat interface
 backed by the Claude API, an admin dashboard, and approval/revoke emails.
@@ -184,6 +184,11 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 - **System prompt** carries fixed context that this is for a family whose kids attend Springhill
   Elementary (Lafayette, CA) and Hideout (an after-school program) — overridable via the
   `SCHOOL_CONTEXT` env var without a code change.
+- **Answers never name individuals** — the system prompt instructs the model to report only the
+  factual content of a document, never who said/wrote it, even though names are often present in
+  the raw source material (a conversation thread, an email signature). This only governs what the
+  chatbot says out loud; the underlying documents themselves are unredacted and fully visible to
+  any approved user on the Documents page, same as ever.
 - **Images are supported** — uploading a `.jpg`/`.png`/`.gif`/`.webp` sends it to Claude's vision
   once at upload time; the returned transcription/description is stored as the document's text
   content, and the image bytes themselves are discarded (never stored). `.txt` and `.pdf` uploads

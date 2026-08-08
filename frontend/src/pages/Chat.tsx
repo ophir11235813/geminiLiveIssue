@@ -193,8 +193,8 @@ export default function Chat() {
             <p className="empty-state">Loading…</p>
           ) : messages.length === 0 ? (
             <p className="empty-state">
-              Ask about the school trip, a WhatsApp thread, a flyer… anything that's been added to the
-              family docs.
+              Ask about the school trip, a conversation thread, a flyer… anything that's been added to
+              the family docs.
             </p>
           ) : (
             messages.map((m, i) => (

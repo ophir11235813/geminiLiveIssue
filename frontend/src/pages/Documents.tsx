@@ -11,7 +11,7 @@ interface Doc {
   uploader_email: string | null;
 }
 
-const SOURCE_TYPES = ['WhatsApp export', 'Email', 'Flyer', 'Note', 'Other'];
+const SOURCE_TYPES = ['Conversation thread', 'Email', 'Flyer', 'Note', 'Other'];
 
 export default function Documents() {
   const { user } = useAuth();
@@ -90,7 +90,7 @@ export default function Documents() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              placeholder="e.g. Grade 3 WhatsApp — June"
+              placeholder="e.g. Grade 3 Group Chat — June"
             />
           </label>
           <label>
@@ -111,7 +111,7 @@ export default function Documents() {
                 onChange={(e) => setContent(e.target.value)}
                 rows={6}
                 required
-                placeholder="Paste a WhatsApp export, forwarded email text, or notes about a flyer/photo…"
+                placeholder="Paste a conversation thread export, forwarded email text, or notes about a flyer/photo…"
               />
             </label>
           ) : (
