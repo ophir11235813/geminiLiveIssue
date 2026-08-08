@@ -112,6 +112,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `SCHOOL_CONTEXT`   | no       | One line of fixed context given to the model on every question (defaults to the Springhill Elementary / Hideout description) |
 | `GMAIL_USER` / `GMAIL_APP_PASSWORD` | no | A dedicated Gmail account (App Password, not the real password) used for both outbound email and email-to-context ingestion (see below). Both unset → outbound falls back to Resend/console, ingestion is disabled |
 | `GMAIL_INGEST_POLL_MINUTES` | no | How often to check that inbox for forwarded context. Defaults to 5 |
+| `GMAIL_INGEST_SUBJECT_FILTER` | no | Only unread mail whose subject contains this (case-insensitive) gets ingested; everything else in the inbox is left untouched. Defaults to `context` |
 | `RESEND_API_KEY`   | no       | Fallback outbound sender if `GMAIL_USER` isn't set. Omit both to just log emails to the console |
 | `FROM_EMAIL`       | no       | Sender address when using the Resend fallback                 |
 | `CLIENT_ORIGIN`    | yes      | Frontend origin, for CORS + cookies                            |
@@ -197,7 +198,10 @@ One **dedicated** Gmail account (not a personal inbox) can handle both direction
   which works for any recipient with no domain to verify (unlike Resend's sandbox sender). Falls
   back to Resend (`RESEND_API_KEY`) if set instead, or to console logging if neither is configured.
 - **Inbound (ingestion)** — the backend polls that same inbox via IMAP (every
-  `GMAIL_INGEST_POLL_MINUTES`, default 5) for unread mail, saving each one as a document — source
+  `GMAIL_INGEST_POLL_MINUTES`, default 5) for unread mail whose subject contains
+  `GMAIL_INGEST_SUBJECT_FILTER` (default `context`, case-insensitive) — so put "context" (or
+  whatever you've set it to) somewhere in the subject when forwarding, and everything else that
+  lands in that inbox is left completely alone. Matches get saved as a document — source
   type `Email`, title from the subject, body as the content, image attachments run through the
   same vision extraction as a manual image upload. Processed messages are marked read so they
   aren't re-ingested. These documents show up with uploader "Auto-imported" since there's no

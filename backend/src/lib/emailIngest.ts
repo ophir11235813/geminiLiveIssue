@@ -11,6 +11,12 @@ import { describeImage, isSupportedImageType } from './claude';
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 const POLL_MINUTES = Number(process.env.GMAIL_INGEST_POLL_MINUTES) || 5;
+// Only messages whose subject contains this (case-insensitive substring,
+// per IMAP SEARCH semantics) get ingested — anything else in the inbox is
+// left completely untouched (not marked read, not looked at again until it
+// either matches or the next poll re-checks it). Lets the same dedicated
+// inbox safely receive other mail without it accidentally becoming context.
+const SUBJECT_FILTER = process.env.GMAIL_INGEST_SUBJECT_FILTER || 'context';
 
 export function isEmailIngestConfigured(): boolean {
   return Boolean(GMAIL_USER && GMAIL_APP_PASSWORD);
@@ -34,7 +40,7 @@ async function processInbox(): Promise<void> {
   try {
     const lock = await client.getMailboxLock('INBOX');
     try {
-      const uids = await client.search({ seen: false }, { uid: true });
+      const uids = await client.search({ seen: false, subject: SUBJECT_FILTER }, { uid: true });
       if (!uids || uids.length === 0) return;
 
       for (const uid of uids) {
@@ -97,7 +103,9 @@ export function startEmailIngestPolling(): void {
     return;
   }
 
-  console.log(`Email ingestion enabled — polling ${GMAIL_USER} every ${POLL_MINUTES} minute(s).`);
+  console.log(
+    `Email ingestion enabled — polling ${GMAIL_USER} every ${POLL_MINUTES} minute(s) for unread mail with "${SUBJECT_FILTER}" in the subject.`
+  );
 
   const run = () => {
     processInbox().catch((err) => {
