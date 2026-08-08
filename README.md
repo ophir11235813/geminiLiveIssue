@@ -20,9 +20,13 @@ backed by the Claude API, an admin dashboard, and approval/revoke emails.
 
 ### Decisions made on the spec's open questions
 
-- **Email provider: Resend.** Simplest API for a Node backend, generous free tier. If
-  `RESEND_API_KEY` isn't set, emails are just logged to the console — the app still works without
-  it configured (handy for local dev).
+- **Email provider: Gmail SMTP (via a dedicated account), Resend as a fallback.** Resend was the
+  original pick, but its sandbox sender can only deliver to the Resend account's own address
+  without a verified domain — a real wall for a deployment with no domain. Sending through a
+  dedicated Gmail account's own SMTP (an App Password, not the real account password) sidesteps
+  that entirely and doubles as the account used for email-to-context ingestion below. If neither
+  `GMAIL_USER`/`GMAIL_APP_PASSWORD` nor `RESEND_API_KEY` are set, emails are just logged to the
+  console — the app still works without either configured (handy for local dev).
 - **Backend hosting: a standalone Express server**, not Vercel serverless functions. It needs a
   persistent Postgres connection pool and file uploads (multer), which fit a normal long-running
   server better than serverless. A `Dockerfile` is included so it can go on Railway, Render, Fly,
@@ -106,13 +110,13 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
 | `SCHOOL_CONTEXT`   | no       | One line of fixed context given to the model on every question (defaults to the Springhill Elementary / Hideout description) |
-| `RESEND_API_KEY`   | no       | Omit to log emails to the console instead of sending them     |
-| `FROM_EMAIL`       | no       | Sender address for approval/revoke emails                     |
+| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | no | A dedicated Gmail account (App Password, not the real password) used for both outbound email and email-to-context ingestion (see below). Both unset → outbound falls back to Resend/console, ingestion is disabled |
+| `GMAIL_INGEST_POLL_MINUTES` | no | How often to check that inbox for forwarded context. Defaults to 5 |
+| `RESEND_API_KEY`   | no       | Fallback outbound sender if `GMAIL_USER` isn't set. Omit both to just log emails to the console |
+| `FROM_EMAIL`       | no       | Sender address when using the Resend fallback                 |
 | `CLIENT_ORIGIN`    | yes      | Frontend origin, for CORS + cookies                            |
 | `APP_URL`          | no       | Frontend URL used in email copy                                |
 | `PORT`             | no       | Defaults to 4000                                                |
-| `GMAIL_INGEST_USER` / `GMAIL_INGEST_APP_PASSWORD` | no | A dedicated Gmail inbox to poll for forwarded context (see below). Both unset → disabled |
-| `GMAIL_INGEST_POLL_MINUTES` | no | How often to check that inbox. Defaults to 5                  |
 
 **frontend/.env**
 
@@ -184,20 +188,26 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
   content, and the image bytes themselves are discarded (never stored). `.txt` and `.pdf` uploads
   are still extracted directly, no LLM call needed for those.
 
-## Email-to-context ingestion (optional)
+## Gmail: outbound email + email-to-context ingestion (optional)
 
-Point a **dedicated** Gmail inbox (not your personal one) at `GMAIL_INGEST_USER` /
-`GMAIL_INGEST_APP_PASSWORD` and the backend polls it (every `GMAIL_INGEST_POLL_MINUTES`, default
-5) for unread mail, saving each one as a document — source type `Email`, title from the subject,
-body as the content, image attachments run through the same vision extraction as a manual image
-upload. Processed messages are marked read so they aren't re-ingested. These documents show up
-with uploader "Auto-imported" since there's no signed-in app user in the loop, but any admin can
-still edit or delete them from the Documents page like any other.
+One **dedicated** Gmail account (not a personal inbox) can handle both directions, via
+`GMAIL_USER` / `GMAIL_APP_PASSWORD`:
+
+- **Outbound** — approval/revoke emails send through that account's own SMTP (`lib/email.ts`),
+  which works for any recipient with no domain to verify (unlike Resend's sandbox sender). Falls
+  back to Resend (`RESEND_API_KEY`) if set instead, or to console logging if neither is configured.
+- **Inbound (ingestion)** — the backend polls that same inbox via IMAP (every
+  `GMAIL_INGEST_POLL_MINUTES`, default 5) for unread mail, saving each one as a document — source
+  type `Email`, title from the subject, body as the content, image attachments run through the
+  same vision extraction as a manual image upload. Processed messages are marked read so they
+  aren't re-ingested. These documents show up with uploader "Auto-imported" since there's no
+  signed-in app user in the loop, but any admin can still edit or delete them from the Documents
+  page like any other.
 
 Setup: create the dedicated Gmail account, turn on 2-Step Verification, generate an **App
 Password** at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (a
-regular Gmail password won't work for this), and set the two env vars. Leave both unset to disable
-this entirely — nothing else about the app depends on it.
+regular Gmail password won't work for either direction), and set the two env vars. Leave both
+unset to disable both features — nothing else about the app depends on either.
 
 ## Feels like an app, not a website
 

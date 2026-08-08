@@ -6,8 +6,10 @@ import { describeImage, isSupportedImageType } from './claude';
 // A dedicated Gmail inbox that people forward context to — polled on an
 // interval (not a webhook), so no domain or inbound-email service is
 // needed. Entirely optional: unset either var and this just never starts.
-const GMAIL_USER = process.env.GMAIL_INGEST_USER;
-const GMAIL_APP_PASSWORD = process.env.GMAIL_INGEST_APP_PASSWORD;
+// Same GMAIL_USER/GMAIL_APP_PASSWORD as lib/email.ts's outbound sending —
+// one account, one app password, both directions.
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 const POLL_MINUTES = Number(process.env.GMAIL_INGEST_POLL_MINUTES) || 5;
 
 export function isEmailIngestConfigured(): boolean {
@@ -91,7 +93,7 @@ let pollTimer: NodeJS.Timeout | undefined;
 
 export function startEmailIngestPolling(): void {
   if (!isEmailIngestConfigured()) {
-    console.log('Email ingestion not configured (GMAIL_INGEST_USER/GMAIL_INGEST_APP_PASSWORD unset) — skipping.');
+    console.log('Email ingestion not configured (GMAIL_USER/GMAIL_APP_PASSWORD unset) — skipping.');
     return;
   }
 
