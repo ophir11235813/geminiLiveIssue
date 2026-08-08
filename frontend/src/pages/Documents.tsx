@@ -6,14 +6,13 @@ interface Doc {
   id: string;
   title: string;
   source_type: string;
+  content: string;
   created_at: string;
-  restricted?: boolean;
-  content?: string;
-  uploader_email?: string | null;
-  sender?: string | null;
-  sent_at?: string | null;
-  flagged?: boolean;
-  flag_reason?: string | null;
+  uploader_email: string | null;
+  sender: string | null;
+  sent_at: string | null;
+  flagged: boolean;
+  flag_reason: string | null;
 }
 
 interface IngestInfo {
@@ -26,9 +25,47 @@ const SOURCE_TYPES = ['Conversation thread', 'Email', 'Flyer', 'Note', 'Other'];
 export default function Documents() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const [ingestInfo, setIngestInfo] = useState<IngestInfo | null>(null);
+
+  useEffect(() => {
+    api
+      .get('/documents/ingest-info')
+      .then((data) => setIngestInfo(data.ingest))
+      .catch(() => setIngestInfo(null));
+  }, []);
+
+  return (
+    <div className="documents-page">
+      <section className="info-card">
+        <h2>What is this page?</h2>
+        <p>
+          This is everything Springhill Sherpa knows — old group chat threads, flyers, notes,
+          anything people have shared — so it can give you good answers when you ask it something.
+        </p>
+        <p>
+          {isAdmin
+            ? "You can add to it below, and manage everything that's already there."
+            : "This part of the site is managed by admins, so there's nothing to add or edit here yourself."}
+        </p>
+        {ingestInfo && (
+          <p>
+            Got something worth adding — a flyer, an old group chat thread, anything school or
+            Hideout related? Forward it by email to <strong>{ingestInfo.email}</strong> with the
+            word <strong>&quot;{ingestInfo.subjectKeyword}&quot;</strong> somewhere in the subject
+            line, and it'll be added automatically
+            {isAdmin ? ' — no need to do anything below for those.' : '.'}
+          </p>
+        )}
+      </section>
+
+      {isAdmin && <AdminDocuments />}
+    </div>
+  );
+}
+
+function AdminDocuments() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ingestInfo, setIngestInfo] = useState<IngestInfo | null>(null);
   const [mode, setMode] = useState<'paste' | 'file'>('paste');
   const [title, setTitle] = useState('');
   const [sourceType, setSourceType] = useState(SOURCE_TYPES[0]);
@@ -47,10 +84,6 @@ export default function Documents() {
 
   useEffect(() => {
     loadDocs();
-    api
-      .get('/documents/ingest-info')
-      .then((data) => setIngestInfo(data.ingest))
-      .catch(() => setIngestInfo(null));
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -88,30 +121,9 @@ export default function Documents() {
   }
 
   return (
-    <div className="documents-page">
-      <section className="info-card">
-        <h2>What is this page?</h2>
-        <p>
-          This is everything Springhill Sherpa knows — old group chat threads, flyers, notes,
-          anything people have shared — so it can give you good answers when you ask it something.
-        </p>
-        <p>
-          {isAdmin
-            ? 'As an admin, you can open any item below to see exactly what it says.'
-            : "You'll see what's been added below, but only an admin can open an item to read it."}
-        </p>
-        {ingestInfo && (
-          <p>
-            Got something worth adding — a flyer, an old thread, anything school or Hideout
-            related? Forward it by email to <strong>{ingestInfo.email}</strong> with the word{' '}
-            <strong>&quot;{ingestInfo.subjectKeyword}&quot;</strong> somewhere in the subject line,
-            and it'll show up here on its own.
-          </p>
-        )}
-      </section>
-
+    <>
       <section className="upload-card">
-        <h2>Add context</h2>
+        <h2>Add something</h2>
         <div className="mode-toggle">
           <button type="button" className={mode === 'paste' ? 'active' : ''} onClick={() => setMode('paste')}>
             Paste text
@@ -184,11 +196,7 @@ export default function Documents() {
           <ul className="doc-list">
             {docs.map((d) => (
               <li key={d.id} className="doc-item">
-                <div
-                  className="doc-header"
-                  onClick={d.restricted ? undefined : () => setExpanded(expanded === d.id ? null : d.id)}
-                  style={d.restricted ? { cursor: 'default' } : undefined}
-                >
+                <div className="doc-header" onClick={() => setExpanded(expanded === d.id ? null : d.id)}>
                   <div>
                     <strong>{d.title}</strong>
                     <span className="tag">{d.source_type}</span>
@@ -199,14 +207,11 @@ export default function Documents() {
                     )}
                   </div>
                   <span className="doc-meta">
-                    {d.restricted
-                      ? 'Visible to admins only'
-                      : `${d.sender ? `From: ${d.sender}` : d.uploader_email ?? 'Auto-imported'} · ${new Date(
-                          d.sent_at ?? d.created_at
-                        ).toLocaleString()}`}
+                    {d.sender ? `From: ${d.sender}` : d.uploader_email ?? 'Auto-imported'} ·{' '}
+                    {new Date(d.sent_at ?? d.created_at).toLocaleString()}
                   </span>
                 </div>
-                {!d.restricted && expanded === d.id && (
+                {expanded === d.id && (
                   <>
                     {d.flagged && (
                       <p className="flag-note">
@@ -217,16 +222,14 @@ export default function Documents() {
                     <pre className="doc-content">{d.content}</pre>
                   </>
                 )}
-                {!d.restricted && (user?.role === 'admin' || user?.email === d.uploader_email) && (
-                  <button className="delete-btn" onClick={() => handleDelete(d.id)}>
-                    Delete
-                  </button>
-                )}
+                <button className="delete-btn" onClick={() => handleDelete(d.id)}>
+                  Delete
+                </button>
               </li>
             ))}
           </ul>
         )}
       </section>
-    </div>
+    </>
   );
 }

@@ -153,11 +153,11 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `POST /admin/users/:id/revoke`    | admin             | Revoke a user, emails them             |
 | `POST /admin/users/:id/promote`   | admin             | Grant admin (also auto-approves)       |
 | `POST /admin/users/:id/demote`    | admin             | Remove admin (can't demote yourself)   |
-| `GET /documents`                  | approved          | List all documents — non-admins get the full record only for documents they uploaded themselves; everything else comes back as `{id, title, source_type, created_at, restricted: true}` with no `content` |
-| `POST /documents`                 | approved          | Add a document (paste JSON or multipart file) |
-| `PATCH /documents/:id`            | admin or uploader | Edit title/source type/content         |
-| `DELETE /documents/:id`           | admin or uploader | Delete a document                      |
-| `GET /documents/ingest-info`      | approved          | `{ ingest: {email, subjectKeyword} \| null }` — powers the "forward stuff here" copy on the Documents page |
+| `GET /documents`                  | admin              | List all documents, full content included |
+| `POST /documents`                 | admin              | Add a document (paste JSON or multipart file) |
+| `PATCH /documents/:id`            | admin              | Edit title/source type/content         |
+| `DELETE /documents/:id`           | admin              | Delete a document                      |
+| `GET /documents/ingest-info`      | approved           | `{ ingest: {email, subjectKeyword} \| null }` — powers the "forward stuff here" copy on the Documents page, for every approved user |
 | `GET /chat/sessions`               | approved          | List this user's chats, most recently active first |
 | `POST /chat/messages`              | approved          | Ask a question in a chat (creates a new chat if `sessionId` omitted), get a Claude-generated answer grounded in all documents |
 | `GET /chat/sessions/:id/messages`  | approved (owner)  | Full message history for one chat      |
@@ -179,14 +179,12 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 
 ## Documents page: who sees what
 
-Regular (non-admin) users see the *list* of everything that's been added — titles, source types,
-timestamps — but not the actual text/content of an item, unless they're the one who added it.
-Admins see everything. This is enforced server-side in `GET /documents` (see API summary above),
-not just hidden in the UI, so a non-admin's browser never receives another person's document
-content in the first place. The page also shows a plain-language explanation box at the top
-(different copy for admins vs. everyone else) and, when email ingestion is configured, tells
-non-technical users how to add more: forward something to the configured Gmail address with the
-subject keyword in the subject line.
+Managing the knowledge base — viewing, adding, editing, deleting documents — is admin-only,
+enforced server-side (`requireAdmin` on every `/documents` route except `ingest-info`; see API
+summary above), not just hidden in the UI. Regular users get a read-only version of the page: a
+plain-language explanation of what it is, plus (when email ingestion is configured) instructions
+for the one way they *can* contribute — forwarding something to the configured Gmail address with
+the subject keyword in the subject line. No upload form, no list, nothing to click.
 
 ## Chat context, caching, and images
 
@@ -244,8 +242,8 @@ One **dedicated** Gmail account (not a personal inbox) can handle both direction
   *and* excluded from the stored content — it never reaches the context store, only a note that it
   happened does. If nothing relevant survives and nothing was flagged, no document is created at
   all. Flagged documents show a red "⚠ Flagged" badge in the Documents list with the reason
-  visible on expand. This filtering only applies to email ingestion — manually pasted/uploaded
-  documents from approved users go straight in, unfiltered, same as always.
+  visible on expand. This filtering only applies to email ingestion — an admin manually
+  pasting/uploading a document goes straight in, unfiltered, same as always.
 - Documents from email also carry the original **sender** and **sent_at** (the email's own `Date:`
   header, not when it happened to be polled) — shown in the Documents list instead of an uploader
   name, since there's no app user behind an ingested email.

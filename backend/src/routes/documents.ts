@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { pool } from '../db';
-import { requireAuth, requireApproved } from '../middleware/auth';
+import { requireAuth, requireApproved, requireAdmin } from '../middleware/auth';
 import { extractTextFromFile, UnsupportedFileTypeError } from '../lib/extractText';
 import { getIngestInfo } from '../lib/emailIngest';
 
@@ -11,39 +11,29 @@ router.use(requireAuth, requireApproved);
 
 // Tells the Documents page where to forward things and what word the
 // subject needs to contain — lets that copy stay accurate without hardcoding
-// the address in the frontend.
+// the address in the frontend. Open to any approved user, not just admins:
+// forwarding by email is the only way a regular user contributes at all.
 router.get('/ingest-info', (_req, res) => {
   res.json({ ingest: getIngestInfo() });
 });
 
-router.get('/', async (req, res, next) => {
+// Everything else here — viewing, adding, editing, deleting documents — is
+// admin-only. Regular users don't manage the knowledge base directly; their
+// one path in is forwarding an email (see ingest-info above), which the
+// backend ingestion pipeline turns into a document on its own.
+router.use(requireAdmin);
+
+router.get('/', async (_req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT d.id, d.title, d.source_type, d.content, d.created_at, d.uploader_id,
+      `SELECT d.id, d.title, d.source_type, d.content, d.created_at,
               d.sender, d.sent_at, d.flagged, d.flag_reason,
               u.email AS uploader_email
        FROM documents d
        LEFT JOIN users u ON u.id = d.uploader_id
        ORDER BY d.created_at DESC`
     );
-
-    // Only admins (or the person who added a given item) get to see what's
-    // actually in it — everyone else just sees that it exists. Enforced
-    // here, not just hidden in the UI, so the full text never reaches a
-    // non-admin browser in the first place.
-    const isAdmin = req.user!.role === 'admin';
-    const documents = rows.map(({ uploader_id, ...row }) => {
-      if (isAdmin || uploader_id === req.user!.id) return row;
-      return {
-        id: row.id,
-        title: row.title,
-        source_type: row.source_type,
-        created_at: row.created_at,
-        restricted: true,
-      };
-    });
-
-    res.json({ documents });
+    res.json({ documents: rows });
   } catch (err) {
     next(err);
   }
@@ -89,15 +79,6 @@ router.post('/', upload.single('file'), async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const { rows: existingRows } = await pool.query('SELECT uploader_id FROM documents WHERE id = $1', [
-      req.params.id,
-    ]);
-    const doc = existingRows[0];
-    if (!doc) return res.status(404).json({ error: 'Document not found' });
-    if (req.user!.role !== 'admin' && doc.uploader_id !== req.user!.id) {
-      return res.status(403).json({ error: 'Not allowed to edit this document' });
-    }
-
     const { title, sourceType, content } = req.body || {};
     const { rows } = await pool.query(
       `UPDATE documents SET
@@ -108,6 +89,7 @@ router.patch('/:id', async (req, res, next) => {
        RETURNING id, title, source_type, content, created_at`,
       [title ?? null, sourceType ?? null, content ?? null, req.params.id]
     );
+    if (!rows[0]) return res.status(404).json({ error: 'Document not found' });
     res.json({ document: rows[0] });
   } catch (err) {
     next(err);
@@ -116,15 +98,8 @@ router.patch('/:id', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    const { rows: existingRows } = await pool.query('SELECT uploader_id FROM documents WHERE id = $1', [
-      req.params.id,
-    ]);
-    const doc = existingRows[0];
-    if (!doc) return res.status(404).json({ error: 'Document not found' });
-    if (req.user!.role !== 'admin' && doc.uploader_id !== req.user!.id) {
-      return res.status(403).json({ error: 'Not allowed to delete this document' });
-    }
-    await pool.query('DELETE FROM documents WHERE id = $1', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM documents WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Document not found' });
     res.json({ ok: true });
   } catch (err) {
     next(err);
