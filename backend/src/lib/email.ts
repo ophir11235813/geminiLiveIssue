@@ -26,7 +26,7 @@ async function sendViaSendGrid(to: string, subject: string, html: string): Promi
     },
     body: JSON.stringify({
       personalizations: [{ to: [{ email: to }] }],
-      from: { email: SENDGRID_FROM_EMAIL, name: 'Springhill Sherpa' },
+      from: { email: SENDGRID_FROM_EMAIL, name: 'Springhill Cubby' },
       subject,
       content: [{ type: 'text/html', value: html }],
     }),
@@ -100,7 +100,7 @@ async function sendViaGmailSmtp(to: string, subject: string, html: string): Prom
     try {
       const ipv4Host = await resolveGmailSmtpIPv4();
       const transport = createGmailTransport(ipv4Host);
-      await transport.sendMail({ from: `Springhill Sherpa <${GMAIL_USER}>`, to, subject, html });
+      await transport.sendMail({ from: `Springhill Cubby <${GMAIL_USER}>`, to, subject, html });
       return;
     } catch (err) {
       const lastAttempt = attempt === maxAttempts;
@@ -156,7 +156,7 @@ async function send(to: string, subject: string, html: string): Promise<void> {
 export function sendApprovalEmail(to: string): Promise<void> {
   return send(
     to,
-    "You're approved — Springhill Sherpa",
+    "You're approved — Springhill Cubby",
     `<p>Good news — your account has been approved.</p>
      <p>Log in here: <a href="${APP_URL}">${APP_URL}</a></p>
      <p>Use the email and password you signed up with.</p>`
@@ -166,8 +166,8 @@ export function sendApprovalEmail(to: string): Promise<void> {
 export function sendRevokeEmail(to: string): Promise<void> {
   return send(
     to,
-    'Your access has been revoked — Springhill Sherpa',
-    `<p>Your access to Springhill Sherpa has been revoked.</p>
+    'Your access has been revoked — Springhill Cubby',
+    `<p>Your access to Springhill Cubby has been revoked.</p>
      <p>If you believe this is a mistake, please contact the admin.</p>`
   );
 }
@@ -175,7 +175,7 @@ export function sendRevokeEmail(to: string): Promise<void> {
 export function sendPasswordResetEmail(to: string, resetLink: string): Promise<void> {
   return send(
     to,
-    'Reset your password — Springhill Sherpa',
+    'Reset your password — Springhill Cubby',
     `<p>Someone (hopefully you) asked to reset the password for this account.</p>
      <p><a href="${resetLink}">Click here to set a new password</a> — this link works for 1 hour.</p>
      <p>If you didn't request this, you can safely ignore this email — your password won't change.</p>`

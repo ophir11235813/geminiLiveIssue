@@ -1,8 +1,8 @@
 {
-  "name": "springhill-sherpa-backend",
+  "name": "springhill-cubby-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "API server for Springhill Sherpa",
+  "description": "API server for Springhill Cubby",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

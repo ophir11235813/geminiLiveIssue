@@ -1,4 +1,4 @@
-# Springhill Sherpa
+# Springhill Cubby
 
 A private, invite-only web app for a family/school group. An admin approves who gets in; approved
 members upload context (conversation thread exports, forwarded emails, flyers) and ask a chatbot

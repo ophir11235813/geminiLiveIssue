@@ -86,7 +86,7 @@ async function start() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Springhill Sherpa API listening on port ${PORT}`);
+    console.log(`Springhill Cubby API listening on port ${PORT}`);
   });
 
   startEmailIngestPolling();

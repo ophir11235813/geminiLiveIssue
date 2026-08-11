@@ -6,12 +6,13 @@ function Logo() {
     <span className="brand">
       <span className="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* A twin-peak mountain, not a generic chat bubble — the "Sherpa"
-              in Springhill Sherpa deserves a mark that actually says so. */}
+          {/* A twin-peak mountain — a distinctive mark, not a generic chat
+              bubble, kept from the earlier "Sherpa" branding pass since the
+              name change didn't touch the visual identity. */}
           <path d="M3 19 L8 6 L11 12 L15 4 L21 19 Z" fill="currentColor" />
         </svg>
       </span>
-      <span className="brand-word">Springhill Sherpa</span>
+      <span className="brand-word">Springhill Cubby</span>
     </span>
   );
 }

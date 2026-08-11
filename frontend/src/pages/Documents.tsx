@@ -39,7 +39,7 @@ export default function Documents() {
       <section className="info-card">
         <h2>What is this page?</h2>
         <p>
-          This is everything Springhill Sherpa knows — old group chat threads, flyers, notes,
+          This is everything Springhill Cubby knows — old group chat threads, flyers, notes,
           anything people have shared — so it can give you good answers when you ask it something.
         </p>
         <p>

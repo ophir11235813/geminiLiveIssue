@@ -18,7 +18,7 @@ const SCHOOL_CONTEXT =
 // originally shared (see chat.ts), so the model can anchor a document's own
 // relative-time language to that instead of to today.
 function buildSystemInstructions(): string {
-  return `You are Springhill Sherpa, a helpful assistant for a family/school group.
+  return `You are Springhill Cubby, a helpful assistant for a family/school group.
 ${SCHOOL_CONTEXT}
 
 Today's date is ${formatDate(new Date())}.
