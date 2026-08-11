@@ -181,3 +181,14 @@ export function sendPasswordResetEmail(to: string, resetLink: string): Promise<v
      <p>If you didn't request this, you can safely ignore this email — your password won't change.</p>`
   );
 }
+
+export function sendVerificationEmail(to: string, verifyLink: string): Promise<void> {
+  return send(
+    to,
+    'Confirm your email — Springhill Cubby',
+    `<p>Thanks for signing up for Springhill Cubby!</p>
+     <p><a href="${verifyLink}">Click here to confirm your email</a> and get straight in — this link
+     works for 24 hours.</p>
+     <p>If you didn't sign up for this, you can safely ignore this email.</p>`
+  );
+}

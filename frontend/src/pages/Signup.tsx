@@ -30,7 +30,7 @@ export default function Signup() {
     <div className="auth-card">
       <h1>Create an account</h1>
       <p className="auth-hint">
-        New accounts need admin approval before you can log in and use the bot.
+        We'll email you a confirmation link — click it and you're straight in, no approval wait.
       </p>
       <form onSubmit={handleSubmit}>
         <label>

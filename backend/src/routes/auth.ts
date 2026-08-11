@@ -4,20 +4,35 @@ import crypto from 'crypto';
 import { pool } from '../db';
 import { signToken, requireAuth } from '../middleware/auth';
 import { adminEmailsConfigured, isConfiguredAdminEmail } from '../lib/adminEmails';
-import { sendPasswordResetEmail } from '../lib/email';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../lib/email';
 
 const router = Router();
 const COOKIE_NAME = 'session';
 const isProd = process.env.NODE_ENV === 'production';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 // A shared secret that proves someone signing up actually belongs to the
-// group, before they even reach the "pending admin approval" stage. Unset
-// means the gate is off (local dev doesn't need it configured).
+// group, before they even reach email verification. Unset means the gate is
+// off (local dev doesn't need it configured).
 const SIGNUP_PASSPHRASE = process.env.SIGNUP_PASSPHRASE;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+// Shared by /signup and /resend-verification — generates a fresh token,
+// stores its hash (overwriting any previous one, so an old link stops
+// working once a new one is requested), and emails the link.
+async function issueVerificationEmail(userId: string, email: string): Promise<void> {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
+  await pool.query(
+    'UPDATE users SET email_verification_token_hash = $1, email_verification_expires_at = $2 WHERE id = $3',
+    [hashToken(rawToken), expiresAt, userId]
+  );
+  const verifyLink = `${APP_URL}/verify-email?token=${rawToken}`;
+  sendVerificationEmail(email, verifyLink).catch(() => {});
 }
 
 const cookieOpts = {
@@ -69,6 +84,14 @@ router.post('/signup', async (req, res, next) => {
       [normalizedEmail, passwordHash, shouldBeAdmin ? 'approved' : 'pending', shouldBeAdmin ? 'admin' : 'user']
     );
     const user = rows[0];
+
+    // Admins/first-user are already approved — no verification needed.
+    // Everyone else needs to confirm their email before they get in; the
+    // passphrase check above already proved group membership, so this is
+    // purely "prove you own this address," not a second approval gate.
+    if (!shouldBeAdmin) {
+      await issueVerificationEmail(user.id, user.email);
+    }
 
     const token = signToken(user.id);
     res.cookie(COOKIE_NAME, token, cookieOpts);
@@ -177,6 +200,61 @@ router.post('/reset-password', async (req, res, next) => {
     );
 
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/verify-email', async (req, res, next) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // status = 'pending' guards against a stale or resent token ever
+    // re-approving someone whose access was later revoked — verification
+    // can only ever move pending -> approved, nothing else.
+    const { rows } = await pool.query(
+      `UPDATE users SET status = 'approved', email_verification_token_hash = NULL, email_verification_expires_at = NULL
+       WHERE email_verification_token_hash = $1 AND email_verification_expires_at > now() AND status = 'pending'
+       RETURNING id, email, status, role`,
+      [hashToken(String(token))]
+    );
+    const user = rows[0];
+    if (!user) {
+      return res
+        .status(400)
+        .json({ error: 'This confirmation link is invalid or has expired. Request a new one below.' });
+    }
+
+    res.json({ user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/resend-verification', async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const { rows } = await pool.query('SELECT id, email FROM users WHERE email = $1 AND status = $2', [
+      normalizedEmail,
+      'pending',
+    ]);
+    const user = rows[0];
+    // Same response whether or not there's actually a pending account here —
+    // otherwise this becomes a way to check who's registered (and whether
+    // they're already approved).
+    if (user) {
+      await issueVerificationEmail(user.id, user.email);
+    }
+
+    res.json({ ok: true, message: "If that email has an account awaiting confirmation, we've sent a new link." });
   } catch (err) {
     next(err);
   }

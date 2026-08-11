@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
 import Pending from './pages/Pending';
 import Revoked from './pages/Revoked';
 import Chat from './pages/Chat';
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/pending" element={<Pending />} />
             <Route path="/revoked" element={<Revoked />} />
             <Route

@@ -1,8 +1,10 @@
 # Springhill Cubby
 
-A private, invite-only web app for a family/school group. An admin approves who gets in; approved
-members upload context (conversation thread exports, forwarded emails, flyers) and ask a chatbot
-questions about it. No vector DB — the context is small enough to hand to Claude directly.
+A private, invite-only web app for a family/school group. Signing up needs a shared group
+passphrase and a confirmed email — no admin click required for the normal case, though admins can
+still manually approve/revoke anyone from the Admin page. Admins add context (conversation thread
+exports, forwarded emails, flyers) and everyone approved can ask a chatbot questions about it. No
+vector DB — the context is small enough to hand to Claude directly.
 
 Implements the spec in full: approval-gated auth, document upload/management, a chat interface
 backed by the Claude API, an admin dashboard, and approval/revoke emails.
@@ -16,7 +18,7 @@ backed by the Claude API, an admin dashboard, and approval/revoke emails.
 | Database | PostgreSQL                                          |
 | Auth     | Roll-your-own — email/password + JWT bearer token          |
 | LLM      | Claude API (`@anthropic-ai/sdk`)                     |
-| Email    | [Resend](https://resend.com)                         |
+| Email    | [SendGrid](https://sendgrid.com), Gmail SMTP + [Resend](https://resend.com) as fallbacks |
 
 ### Decisions made on the spec's open questions
 
@@ -39,6 +41,13 @@ backed by the Claude API, an admin dashboard, and approval/revoke emails.
 - **Auth: roll-your-own** (bcrypt + JWT), not Clerk. Clerk is a fine choice too, but it pulls in an
   external account system for what's a small, single-tenant, invite-only app — plain
   email/password with an approval gate is simpler to reason about and self-contained.
+- **Access gate: signup passphrase + email confirmation, not manual admin approval.** Originally
+  every signup sat in `pending` until an admin clicked approve — tedious for something that happens
+  routinely. The shared `SIGNUP_PASSPHRASE` already proves someone belongs to the group; email
+  confirmation (`/auth/verify-email`) on top of that proves they own the address they signed up
+  with, which is all a normal signup actually needs. Manual admin approve/revoke stays available on
+  the Admin page as an override (e.g. a confirmation email that never arrives) — verification can
+  only ever move `pending` -> `approved`, so a stale/resent token can never undo a revoke.
 - **Admin identity lives in the database (`role` column), managed from the Admin page** —
   promote/demote buttons next to each user, no redeploy or env var edit needed to add an admin
   later. `ADMIN_EMAILS` (comma-separated env var) exists alongside this as a safety net, not the
@@ -99,8 +108,10 @@ npm run dev             # http://localhost:5173
 
 Open `http://localhost:5173`, sign up with an email listed in `ADMIN_EMAILS` (or, if you haven't
 set that yet, whichever email you use first) — that account becomes admin and is immediately
-approved. Anyone else lands on a "waiting for approval" screen until the admin approves them from
-`/admin`.
+approved. Anyone else needs to confirm their email before they're in: with no email provider
+configured locally, the confirmation link just gets logged to the backend console instead of
+actually sent — copy it from there. (An admin can still manually approve someone from `/admin`
+instead, e.g. if you don't want to bother with the link locally.)
 
 ## Environment variables
 
@@ -111,7 +122,7 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 | `DATABASE_URL`     | yes      | Postgres connection string                                   |
 | `PGSSL`            | no       | `require` for hosted Postgres, `disable` for local (default) |
 | `JWT_SECRET`       | yes      | Long random string (`openssl rand -hex 32`)                  |
-| `SIGNUP_PASSPHRASE`| no       | Shared passphrase required at signup, proving group membership before an account even reaches "pending". Unset → no passphrase gate |
+| `SIGNUP_PASSPHRASE`| no       | Shared passphrase required at signup, proving group membership. Combined with email confirmation, this is what gets someone in — no admin click needed. Unset → no passphrase gate |
 | `ADMIN_EMAILS`     | no       | Comma-separated emails auto-granted admin (safety net, not the main path — see above). Unset → first signup becomes admin instead |
 | `ANTHROPIC_API_KEY`| yes      | Claude API key                                                |
 | `CLAUDE_MODEL`     | no       | Defaults to `claude-sonnet-5`                                 |
@@ -150,8 +161,10 @@ approved. Anyone else lands on a "waiting for approval" screen until the admin a
 
 | Endpoint                         | Auth            | Description                          |
 | --------------------------------- | ---------------- | -------------------------------------- |
-| `POST /auth/signup`               | —                 | Create account (pending, unless first user). Rejects with 403 if `SIGNUP_PASSPHRASE` is set and the wrong passphrase (or none) was submitted |
+| `POST /auth/signup`               | —                 | Create account (pending, unless first user/admin email). Rejects with 403 if `SIGNUP_PASSPHRASE` is set and the wrong passphrase (or none) was submitted. Sends a confirmation email unless already approved |
 | `POST /auth/login`                | —                 | Log in                                 |
+| `POST /auth/verify-email`         | —                 | Confirm an email with its token — moves `pending` -> `approved`. Only ever moves *out of* `pending`, so a revoked account's old/resent token can never re-approve it |
+| `POST /auth/resend-verification`  | —                 | Send a fresh confirmation link if the address has a `pending` account (same response either way) |
 | `POST /auth/forgot-password`      | —                 | Email a password reset link if the address has an account (same response either way, to avoid leaking who's registered) |
 | `POST /auth/reset-password`       | —                 | Set a new password from a reset token (1 hour expiry, single use) |
 | `POST /auth/logout`               | —                 | Clear session                          |

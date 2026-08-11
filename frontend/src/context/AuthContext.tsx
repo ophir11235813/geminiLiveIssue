@@ -16,6 +16,8 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
+  verifyEmail: (token: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -70,9 +72,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post('/auth/reset-password', { token, password });
   }
 
+  async function verifyEmail(token: string) {
+    const data = await api.post('/auth/verify-email', { token });
+    // Update in place rather than refetching /auth/me — the response
+    // already has the freshly-approved user, and ProtectedRoute reacts to
+    // this the moment it changes.
+    setUser(data.user);
+  }
+
+  async function resendVerification(email: string) {
+    await api.post('/auth/resend-verification', { email });
+  }
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, logout, forgotPassword, resetPassword }}
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        logout,
+        forgotPassword,
+        resetPassword,
+        verifyEmail,
+        resendVerification,
+      }}
     >
       {children}
     </AuthContext.Provider>
