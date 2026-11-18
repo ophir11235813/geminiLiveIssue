@@ -17,6 +17,13 @@ const POLL_MINUTES = Number(process.env.GMAIL_INGEST_POLL_MINUTES) || 5;
 // either matches or the next poll re-checks it). Lets the same dedicated
 // inbox safely receive other mail without it accidentally becoming context.
 const SUBJECT_FILTER = process.env.GMAIL_INGEST_SUBJECT_FILTER || 'context';
+// How many times a single message gets retried after a failure before
+// processInbox gives up on it and marks it read anyway. Keyed by IMAP uid,
+// in-memory only — reset on restart, which just means a fresh boot gives a
+// still-stuck message another bounded set of attempts rather than resuming
+// an ever-growing count, which is fine for what this guards against.
+const MAX_INGEST_ATTEMPTS = 3;
+const failedAttempts = new Map<number, number>();
 
 export function isEmailIngestConfigured(): boolean {
   return Boolean(GMAIL_USER && GMAIL_APP_PASSWORD);
@@ -54,12 +61,31 @@ async function processInbox(): Promise<void> {
       for (const uid of uids) {
         try {
           await ingestMessage(client, uid);
+          failedAttempts.delete(uid);
         } catch (err) {
           // One bad message shouldn't stop the rest of the batch — leave it
-          // unread so it gets retried next poll (worst case it's retried
-          // forever if it's genuinely unparseable, which is an acceptable
-          // trade-off next to silently losing it).
-          console.error(`Failed to ingest inbox message uid ${uid}`, err);
+          // unread so it gets retried next poll. But only up to a point: a
+          // persistent failure (the database being unreachable, say — this
+          // is exactly what happened when a paused Supabase project turned
+          // every save into a dead end) would otherwise retry the same
+          // message forever, re-running the uncached Claude extraction call
+          // every single poll with no way to ever succeed. Give up after a
+          // few attempts instead, so a bad outage costs a handful of calls,
+          // not an unbounded number of them for as long as the outage lasts.
+          const attempts = (failedAttempts.get(uid) ?? 0) + 1;
+          if (attempts >= MAX_INGEST_ATTEMPTS) {
+            console.error(
+              `Giving up on inbox message uid ${uid} after ${attempts} failed attempts — marking it read so it isn't retried forever`,
+              err
+            );
+            failedAttempts.delete(uid);
+            await client
+              .messageFlagsAdd(uid, ['\\Seen'], { uid: true })
+              .catch((flagErr) => console.error(`Also failed to mark uid ${uid} as read while giving up on it`, flagErr));
+          } else {
+            failedAttempts.set(uid, attempts);
+            console.error(`Failed to ingest inbox message uid ${uid} (attempt ${attempts}/${MAX_INGEST_ATTEMPTS})`, err);
+          }
         }
       }
     } finally {

@@ -279,6 +279,14 @@ The same dedicated Gmail account used for the SMTP fallback above (`GMAIL_USER` 
   as a manual image upload. Processed messages are marked read so they aren't re-ingested. These
   documents show up with uploader "Auto-imported" since there's no signed-in app user in the loop,
   but any admin can still edit or delete them from the Documents page like any other.
+- **Bounded retries.** A message is only marked read after it's actually saved — if the save fails
+  (e.g. the database being unreachable), it's retried next poll, up to `MAX_INGEST_ATTEMPTS` (3,
+  in `lib/emailIngest.ts`) times before being given up on and marked read anyway. This exists
+  because of a real incident: a paused database turned every save into a permanent failure, and
+  with no cap, the same message got reprocessed — including a fresh, uncached Claude extraction
+  call — every single poll, forever, silently running up a large API bill with no app traffic in
+  sight. Three attempts absorbs a genuine transient blip without letting a sustained outage cost
+  an unbounded amount.
 - **Filtered before it's ever stored.** Each email's body (plus any image descriptions) goes
   through an extraction pass (`extractRelevantEmailContext` in `lib/claude.ts`) before saving:
   only content genuinely relevant to the school/Hideout/Springhill context is kept — ordinary
